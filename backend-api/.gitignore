@@ -1,0 +1,33 @@
+node_modules
+.env
+Mini-Project/
+├─ admin-panel/
+│  ├─ .next/
+│  │  ├─ dev/
+│  │  │  ├─ build/
+│  │  │  │  └─ chunks/
+│  │  │  ├─ cache/
+│  │  │  │  └─ turbopack/
+│  │  │  │     └─ 411c455d/
+│  │  │  ├─ logs/
+│  │  │  ├─ server/
+│  │  │  │  ├─ app/
+│  │  │  │  │  └─ page/
+│  │  │  │  └─ chunks/
+│  │  │  │     └─ ssr/
+│  │  │  ├─ static/
+│  │  │  │  ├─ chunks/
+│  │  │  │  ├─ development/
+│  │  │  │  └─ media/
+│  │  │  └─ types/
+│  │  └─ types/
+│  ├─ app/
+│  └─ public/
+└─ backend-api/
+   └─ src/
+      ├─ config/
+      ├─ controllers/
+      ├─ middleware/
+      ├─ models/
+      ├─ routes/
+      └─ utils/
