@@ -3,11 +3,7 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
 
-// Register
-exports.registerUser = async (
-  req,
-  res
-) => {
+exports.registerUser = async (req, res) => {
   try {
     const {
       name,
@@ -16,92 +12,83 @@ exports.registerUser = async (
       password,
     } = req.body;
 
-    const existing =
-      await User.findOne({
-        email,
-      });
+    const existingUser =
+      await User.findOne({ email });
 
-    if (existing) {
+    if (existingUser) {
       return res.status(400).json({
+        success: false,
         message:
-          "User already exists",
+          "Email already registered",
       });
     }
 
-    const hashed =
-      await bcrypt.hash(
-        password,
-        10
-      );
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
 
-    const user =
-      await User.create({
-        name,
-        email,
-        phone,
-        password: hashed,
-      });
+    const user = await User.create({
+      name,
+      email,
+      phone,
+      password: hashedPassword,
+    });
 
     res.status(201).json({
       success: true,
       message:
-        "Account created successfully",
+        "User registered successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
     });
-
   } catch (error) {
-    console.log(error);
+    console.error(error);
 
     res.status(500).json({
+      success: false,
       message: error.message,
     });
   }
 };
 
-// Login
-exports.loginUser = async (
-  req,
-  res
-) => {
+exports.loginUser = async (req, res) => {
   try {
-    const {
-      email,
-      password,
-    } = req.body;
+    const { email, password } =
+      req.body;
 
     const user =
-      await User.findOne({
-        email,
-      });
+      await User.findOne({ email });
 
     if (!user) {
       return res.status(400).json({
+        success: false,
         message:
-          "Invalid credentials",
+          "Invalid Credentials",
       });
     }
 
-    const valid =
+    const validPassword =
       await bcrypt.compare(
         password,
         user.password
       );
 
-    if (!valid) {
+    if (!validPassword) {
       return res.status(400).json({
+        success: false,
         message:
-          "Invalid credentials",
+          "Invalid Credentials",
       });
     }
 
     const token =
-      generateToken(
-        user._id
-      );
+      generateToken(user._id);
 
-    res.json({
+    res.status(200).json({
       success: true,
       token,
-
       user: {
         id: user._id,
         name: user.name,
@@ -109,11 +96,33 @@ exports.loginUser = async (
         phone: user.phone,
       },
     });
-
   } catch (error) {
-    console.log(error);
+    console.error(error);
 
     res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getProfile = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      await User.findById(
+        req.user.id
+      ).select("-password");
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
       message: error.message,
     });
   }
