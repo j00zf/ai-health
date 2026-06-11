@@ -74,16 +74,26 @@ class _LoginScreenState
     }
   }
 
-  Future<void> signInWithGoogle() async {
+ Future<void> signInWithGoogle() async {
 
-    final user =
-        await GoogleAuthService.signIn();
+  final user =
+      await GoogleAuthService.signIn();
 
-    if (user == null) return;
+  if (user == null) return;
 
-    print(
-      "Google User: ${user.email}",
-    );
+  final result =
+      await AuthService.googleLogin(
+    name:
+        user.displayName ?? "",
+    email:
+        user.email ?? "",
+    firebaseUid:
+        user.uid,
+    photoUrl:
+        user.photoURL ?? "",
+  );
+
+  if (result["success"]) {
 
     if (mounted) {
       Navigator.pushReplacementNamed(
@@ -91,8 +101,19 @@ class _LoginScreenState
         '/dashboard',
       );
     }
-  }
 
+  } else {
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(
+          result["message"],
+        ),
+      ),
+    );
+  }
+}
   @override
   Widget build(BuildContext context) {
 

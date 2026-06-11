@@ -28,13 +28,25 @@ class _RegisterScreenState
   bool loading = false;
 
 Future<void> signInWithGoogle() async {
+
   final user =
       await GoogleAuthService.signIn();
 
-  if (user != null) {
+  if (user == null) return;
 
-    print(user.displayName);
-    print(user.email);
+  final result =
+      await AuthService.googleLogin(
+    name:
+        user.displayName ?? "",
+    email:
+        user.email ?? "",
+    firebaseUid:
+        user.uid,
+    photoUrl:
+        user.photoURL ?? "",
+  );
+
+  if (result["success"]) {
 
     if (mounted) {
       Navigator.pushReplacementNamed(
@@ -42,9 +54,19 @@ Future<void> signInWithGoogle() async {
         '/dashboard',
       );
     }
+
+  } else {
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(
+          result["message"],
+        ),
+      ),
+    );
   }
 }
-
   Future<void> register() async {
     setState(() {
       loading = true;

@@ -68,4 +68,36 @@ class AuthService {
       };
     }
   }
+
+static Future<Map<String, dynamic>>
+googleLogin({
+  required String name,
+  required String email,
+  required String firebaseUid,
+  required String photoUrl,
+}) async {
+
+  try {
+
+    final response = await dio.post(
+      "/user/google-login",
+      data: {
+        "name": name,
+        "email": email,
+        "firebaseUid": firebaseUid,
+        "photoUrl": photoUrl,
+      },
+    );
+
+    return response.data;
+
+  } catch (e) {
+
+    return {
+      "success": false,
+      "message": e.toString(),
+    };
+
+  }
+}
 }
