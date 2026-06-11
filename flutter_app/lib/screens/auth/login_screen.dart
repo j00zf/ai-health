@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/google_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,14 +22,30 @@ class _LoginScreenState
   bool loading = false;
 
   Future<void> login() async {
+
+    if (emailController.text.isEmpty ||
+        passwordController.text.isEmpty) {
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Please fill all fields",
+          ),
+        ),
+      );
+
+      return;
+    }
+
     setState(() {
       loading = true;
     });
 
     final result =
         await AuthService.login(
-      emailController.text,
-      passwordController.text,
+      emailController.text.trim(),
+      passwordController.text.trim(),
     );
 
     setState(() {
@@ -36,11 +53,16 @@ class _LoginScreenState
     });
 
     if (result["success"]) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/dashboard',
-      );
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(
+          context,
+          '/dashboard',
+        );
+      }
+
     } else {
+
       ScaffoldMessenger.of(context)
           .showSnackBar(
         SnackBar(
@@ -52,46 +74,144 @@ class _LoginScreenState
     }
   }
 
+  Future<void> signInWithGoogle() async {
+
+    final user =
+        await GoogleAuthService.signIn();
+
+    if (user == null) return;
+
+    print(
+      "Google User: ${user.email}",
+    );
+
+    if (mounted) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/dashboard',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
-      appBar:
-          AppBar(title: const Text("Login")),
+      appBar: AppBar(
+        title: const Text("Login"),
+      ),
+
       body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
+        padding:
+            const EdgeInsets.all(20),
 
-            TextField(
-              controller: emailController,
-              decoration:
-                  const InputDecoration(
-                labelText: "Email",
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+
+              TextField(
+                controller:
+                    emailController,
+                keyboardType:
+                    TextInputType.emailAddress,
+                decoration:
+                    const InputDecoration(
+                  labelText: "Email",
+                  border:
+                      OutlineInputBorder(),
+                ),
               ),
-            ),
 
-            const SizedBox(height: 15),
-
-            TextField(
-              controller:
-                  passwordController,
-              obscureText: true,
-              decoration:
-                  const InputDecoration(
-                labelText: "Password",
+              const SizedBox(
+                height: 15,
               ),
-            ),
 
-            const SizedBox(height: 30),
+              TextField(
+                controller:
+                    passwordController,
+                obscureText: true,
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      "Password",
+                  border:
+                      OutlineInputBorder(),
+                ),
+              ),
 
-            loading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: login,
-                    child:
-                        const Text("Login"),
-                  )
-          ],
+              const SizedBox(
+                height: 25,
+              ),
+
+              loading
+                  ? const CircularProgressIndicator()
+                  : SizedBox(
+                      width:
+                          double.infinity,
+                      child:
+                          ElevatedButton(
+                        onPressed:
+                            login,
+                        child:
+                            const Text(
+                          "Login",
+                        ),
+                      ),
+                    ),
+
+              const SizedBox(
+                height: 20,
+              ),
+
+              const Text(
+                "OR",
+                style: TextStyle(
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(
+                height: 20,
+              ),
+
+              SizedBox(
+                width:
+                    double.infinity,
+                child:
+                    OutlinedButton.icon(
+                  onPressed:
+                      signInWithGoogle,
+                  icon:
+                      const Icon(
+                    Icons.login,
+                  ),
+                  label:
+                      const Text(
+                    "Continue with Google",
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                height: 20,
+              ),
+
+              TextButton(
+                onPressed: () {
+
+                  Navigator.pushNamed(
+                    context,
+                    "/register",
+                  );
+
+                },
+                child: const Text(
+                  "Create Account",
+                ),
+              )
+            ],
+          ),
         ),
       ),
     );

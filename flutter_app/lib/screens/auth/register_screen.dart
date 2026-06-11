@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
-
+import '../../core/services/google_auth_service.dart';
 class RegisterScreen
     extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -26,6 +26,24 @@ class _RegisterScreenState
       TextEditingController();
 
   bool loading = false;
+
+Future<void> signInWithGoogle() async {
+  final user =
+      await GoogleAuthService.signIn();
+
+  if (user != null) {
+
+    print(user.displayName);
+    print(user.email);
+
+    if (mounted) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/dashboard',
+      );
+    }
+  }
+}
 
   Future<void> register() async {
     setState(() {
@@ -114,17 +132,35 @@ class _RegisterScreenState
                 ),
               ),
 
-              const SizedBox(height: 30),
+             const SizedBox(height: 30),
 
               loading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
-                      onPressed:
-                          register,
+                      onPressed: register,
                       child: const Text(
                         "Create Account",
                       ),
                     ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                "OR",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              OutlinedButton.icon(
+                onPressed: signInWithGoogle,
+                icon: const Icon(Icons.login),
+                label: const Text(
+                  "Continue with Google",
+                ),
+              ),
             ],
           ),
         ),

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "316580441902",
+    "project_id": "fitbit-project-4a220",
+    "storage_bucket": "fitbit-project-4a220.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:316580441902:android:62b13ae3ad172b366554bf",
+        "android_client_info": {
+          "package_name": "com.example.flutter_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyByRzCPKrtr7UJaoeXskhMCjQxod8ES3j0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

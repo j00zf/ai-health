@@ -2,20 +2,29 @@ import 'package:flutter/material.dart';
 
 class DashboardScreen
     extends StatelessWidget {
-  const DashboardScreen({super.key});
+
+  const DashboardScreen({
+    super.key,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context) {
+
     return Scaffold(
-      appBar:
-          AppBar(title: const Text(
-        "Dashboard",
-      )),
+      appBar: AppBar(
+        title: const Text(
+          "Dashboard",
+        ),
+      ),
+
       body: const Center(
         child: Text(
           "Welcome to Fitbit Health",
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 24,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
       ),
