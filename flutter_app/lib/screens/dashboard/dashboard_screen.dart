@@ -26,7 +26,7 @@ class DashboardScreen extends StatelessWidget {
           children: [
 
             const Text(
-              "Welcome to Fitbit Health",
+              "Welcome to Pulse AI",
               style: TextStyle(
                 fontSize: 24,
                 fontWeight:

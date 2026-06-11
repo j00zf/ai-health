@@ -22,7 +22,7 @@ class WelcomeScreen extends StatelessWidget {
               const SizedBox(height: 20),
 
               const Text(
-                "Fitbit Health",
+                "Pulse AI",
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,

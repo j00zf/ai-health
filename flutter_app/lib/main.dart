@@ -22,7 +22,7 @@ class FitbitHealthApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Fitbit Health',
+      title: 'Pulse AI',
       debugShowCheckedModeBanner: false,
 
       theme: ThemeData(
