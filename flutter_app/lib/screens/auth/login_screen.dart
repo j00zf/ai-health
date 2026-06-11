@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../../core/services/auth_service.dart';
 import '../../core/services/google_auth_service.dart';
+
+import '../dashboard/dashboard_screen.dart';
+import '../onboarding/profile_setup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,13 +56,41 @@ class _LoginScreenState
       loading = false;
     });
 
+    if (!mounted) return;
+
     if (result["success"]) {
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(
+      final String token =
+          result["token"];
+
+      final userData =
+          result["user"];
+
+      if (userData["profileCompleted"] ==
+          false) {
+
+        Navigator.pushReplacement(
           context,
-          '/dashboard',
+          MaterialPageRoute(
+            builder: (_) =>
+                CompleteProfileScreen(
+              token: token,
+            ),
+          ),
         );
+
+      } else {
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                DashboardScreen(
+              token: token,
+            ),
+          ),
+        );
+
       }
 
     } else {
@@ -67,59 +99,107 @@ class _LoginScreenState
           .showSnackBar(
         SnackBar(
           content: Text(
-            result["message"],
+            result["message"] ??
+                "Login Failed",
           ),
         ),
       );
+
     }
   }
 
- Future<void> signInWithGoogle() async {
+  Future<void> signInWithGoogle() async {
 
-  final user =
-      await GoogleAuthService.signIn();
+    final googleUser =
+        await GoogleAuthService.signIn();
 
-  if (user == null) return;
-
-  final result =
-      await AuthService.googleLogin(
-    name:
-        user.displayName ?? "",
-    email:
-        user.email ?? "",
-    firebaseUid:
-        user.uid,
-    photoUrl:
-        user.photoURL ?? "",
-  );
-
-  if (result["success"]) {
-
-    if (mounted) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/dashboard',
-      );
+    if (googleUser == null) {
+      return;
     }
 
-  } else {
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      SnackBar(
-        content: Text(
-          result["message"],
-        ),
-      ),
+    final result =
+        await AuthService.googleLogin(
+      name:
+          googleUser.displayName ?? "",
+      email:
+          googleUser.email ?? "",
+      firebaseUid:
+          googleUser.uid,
+      photoUrl:
+          googleUser.photoURL ?? "",
     );
+
+    if (!mounted) return;
+
+    if (result["success"]) {
+
+      final String token =
+          result["token"];
+
+      final userData =
+          result["user"];
+
+      if (userData["profileCompleted"] ==
+          false) {
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                CompleteProfileScreen(
+              token: token,
+            ),
+          ),
+        );
+
+      } else {
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                DashboardScreen(
+              token: token,
+            ),
+          ),
+        );
+
+      }
+
+    } else {
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            result["message"] ??
+                "Google Sign In Failed",
+          ),
+        ),
+      );
+
+    }
   }
-}
+
   @override
-  Widget build(BuildContext context) {
+  void dispose() {
+
+    emailController.dispose();
+    passwordController.dispose();
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(
+      BuildContext context) {
 
     return Scaffold(
+
       appBar: AppBar(
-        title: const Text("Login"),
+        title: const Text(
+          "Login",
+        ),
       ),
 
       body: Padding(
@@ -134,10 +214,12 @@ class _LoginScreenState
                 controller:
                     emailController,
                 keyboardType:
-                    TextInputType.emailAddress,
+                    TextInputType
+                        .emailAddress,
                 decoration:
                     const InputDecoration(
-                  labelText: "Email",
+                  labelText:
+                      "Email",
                   border:
                       OutlineInputBorder(),
                 ),
@@ -230,7 +312,7 @@ class _LoginScreenState
                 child: const Text(
                   "Create Account",
                 ),
-              )
+              ),
             ],
           ),
         ),

@@ -48,6 +48,7 @@ dependencies:
   # Date Formatting
   intl: ^0.20.2
   # Loading Indicators
+  
   flutter_spinkit: ^5.2.1
   firebase_core: ^4.0.0
   firebase_auth: ^6.0.0

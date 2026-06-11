@@ -1,36 +1,22 @@
-const express =
-  require("express");
+const express = require("express");
+const router = express.Router();
 
-const router =
-  express.Router();
-
-const {
-  registerUser,
-  loginUser,
-  getProfile,
-} = require(
-  "../controllers/user.controller"
-);
-
-const userAuth =
-  require(
-    "../middleware/userAuth"
-  );
+const userController =
+  require("../controllers/user.controller");
 
 router.post(
   "/register",
-  registerUser
+  userController.registerUser
 );
 
 router.post(
   "/login",
-  loginUser
+  userController.loginUser
 );
 
-router.get(
-  "/profile",
-  userAuth,
-  getProfile
+router.post(
+  "/google-login",
+  userController.googleLogin
 );
 
 module.exports = router;

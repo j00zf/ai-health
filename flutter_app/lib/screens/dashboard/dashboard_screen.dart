@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 
-class DashboardScreen
-    extends StatelessWidget {
+class DashboardScreen extends StatelessWidget {
+
+  final String token;
 
   const DashboardScreen({
     super.key,
+    required this.token,
   });
 
   @override
-  Widget build(
-      BuildContext context) {
+  Widget build(BuildContext context) {
 
     return Scaffold(
       appBar: AppBar(
@@ -18,14 +19,32 @@ class DashboardScreen
         ),
       ),
 
-      body: const Center(
-        child: Text(
-          "Welcome to Fitbit Health",
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight:
-                FontWeight.bold,
-          ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+          children: [
+
+            const Text(
+              "Welcome to Fitbit Health",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(
+              height: 20,
+            ),
+
+            Text(
+              "JWT Token Available",
+              style: TextStyle(
+                color: Colors.green,
+              ),
+            ),
+          ],
         ),
       ),
     );

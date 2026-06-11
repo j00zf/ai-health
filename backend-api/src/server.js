@@ -18,6 +18,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
 const healthRoutes = require("./routes/health.routes");
+const profileRoutes = require("./routes/profileRoutes");
 
 const app = express();
 
@@ -39,7 +40,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/health", healthRoutes);
-
+app.use("/api/profile",profileRoutes);
 // Server
 const PORT = process.env.PORT || 5000;
 
