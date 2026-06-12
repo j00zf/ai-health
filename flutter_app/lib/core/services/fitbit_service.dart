@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_auth/flutter_web_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import '../constants/api_constants.dart';
 class FitbitService {
   static const String clientId = 'YOUR_FITBIT_CLIENT_ID_HERE';           // ← Replace with your Fitbit Client ID
   static const String clientSecret = 'YOUR_FITBIT_CLIENT_SECRET_HERE';   // ← Replace with your Client Secret
@@ -91,7 +91,7 @@ class FitbitService {
     try {
       // Replace with your actual API endpoint
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/devices/fitbit/connect'), // Change to your real URL
+        Uri.parse(ApiConstants.fitbitConnect), // Change to your real URL
         headers: {
           'Content-Type': 'application/json',
           // Add your auth token if needed
@@ -156,5 +156,85 @@ class FitbitService {
       print("Refresh token failed: $e");
     }
     return false;
+  }
+
+  // ==================== DATA SYNCING ====================
+
+  // Sync today's data
+  static Future<bool> syncTodayData() async {
+    final token = await getAccessToken();
+    if (token == null) return false;
+
+    try {
+      final today = DateTime.now().toIso8601String().split('T')[0];
+
+      // Fetch Steps + Activity
+      final activityRes = await http.get(
+        Uri.parse('https://api.fitbit.com/1/user/-/activities/date/$today.json'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      // Fetch Sleep
+      final sleepRes = await http.get(
+        Uri.parse('https://api.fitbit.com/1.2/user/-/sleep/date/$today.json'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (activityRes.statusCode == 200) {
+        final activity = jsonDecode(activityRes.body);
+        final sleep = sleepRes.statusCode == 200 ? jsonDecode(sleepRes.body) : {};
+
+        final data = {
+          "date": today,
+          "steps": activity['summary']['steps'] ?? 0,
+          "caloriesOut": activity['summary']['caloriesOut'] ?? 0,
+          "heartRate": {
+            "resting": activity['summary']['restingHeartRate'],
+          },
+          "sleep": _parseSleepData(sleep),
+        };
+
+        // Send to your backend
+        await _sendDataToBackend(data);
+        print("✅ Fitbit data synced successfully");
+        return true;
+      }
+    } catch (e) {
+      print("❌ Sync failed: $e");
+    }
+    return false;
+  }
+
+  static Map<String, dynamic> _parseSleepData(dynamic sleepData) {
+    if (sleepData.isEmpty || sleepData['summary'] == null) return {};
+    final summary = sleepData['summary'];
+
+    return {
+      "duration": summary['totalTimeInBed'] ?? 0,
+      "efficiency": summary['efficiency'],
+      "deep": summary['stages']?['deep'],
+      "light": summary['stages']?['light'],
+      "rem": summary['stages']?['rem'],
+      "awake": summary['stages']?['wake'],
+    };
+  }
+
+  static Future<void> _sendDataToBackend(Map<String, dynamic> data) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConstants.fitbitSync), // Update with your real endpoint
+        headers: {
+          'Content-Type': 'application/json',
+          // Add Authorization header if needed
+        },
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ Data saved to backend");
+      }
+    } catch (e) {
+      print("⚠️ Failed to save data to backend: $e");
+    }
   }
 }
