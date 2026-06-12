@@ -72,7 +72,10 @@ const userProfileSchema = new mongoose.Schema(
     ],
     default: "Improve Fitness",
   },
-
+fitbitConnected: {
+  type: Boolean,
+  default: false,
+},
 },
 {
   timestamps: true,
