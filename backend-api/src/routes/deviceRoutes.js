@@ -6,7 +6,6 @@ const protect = require("../middleware/userAuth");
 
 // Import both controllers separately
 const deviceController = require("../controllers/deviceController");
-const fitbitController = require("../controllers/fitbitController");
 
 // --- Routes mapping to deviceController.js ---
 router.post("/fitbit/connect", protect, deviceController.connectFitbit);
