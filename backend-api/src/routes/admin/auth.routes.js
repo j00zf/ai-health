@@ -5,10 +5,10 @@ const router = express.Router();
 const {
   registerAdmin,
   loginAdmin
-} = require("../controllers/auth.controller");
+} = require("../../controllers/admin/auth.controller");
 
 const authMiddleware =
-  require("../middleware/auth.middleware");
+  require("../../middleware/auth.middleware");
 
 router.post(
   "/register",

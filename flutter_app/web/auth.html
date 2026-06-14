@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Authentication Complete</title>
+</head>
+<body>
+    <script>
+        // Send the URL data containing the authorization code back to the main app instance
+        window.opener.postMessage({
+            'flutter-web-auth': window.location.href
+        }, window.location.origin);
+        
+        // Close the authentication window automatically
+        window.close();
+    </script>
+    <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+        <h3>Authentication is complete!</h3>
+        <p>You can close this window manually if it doesn't close automatically.</p>
+    </div>
+</body>
+</html>

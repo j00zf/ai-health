@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
 
-const Admin = require("../models/Admin");
-const generateToken = require("../utils/generateToken");
+const Admin = require("../../models/Admin");
+const generateToken = require("../../utils/generateToken");
 
 // =========================
 // Register Admin
@@ -11,6 +11,10 @@ exports.registerAdmin = async (
   res
 ) => {
   try {
+    console.log(
+      "========== REGISTER START =========="
+    );
+
     console.log(
       "Register Request:",
       req.body
@@ -22,6 +26,20 @@ exports.registerAdmin = async (
       password,
     } = req.body;
 
+    // Validation
+    if (
+      !name ||
+      !email ||
+      !password
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "All fields are required",
+      });
+    }
+
+    // Check existing admin
     const existing =
       await Admin.findOne({
         email,
@@ -35,18 +53,25 @@ exports.registerAdmin = async (
       });
     }
 
+    // Hash password
     const hashedPassword =
       await bcrypt.hash(
         password,
         10
       );
 
+    // Create admin
     const admin =
       await Admin.create({
         name,
         email,
         password:
           hashedPassword,
+
+        // New fields
+        status:
+          "inactive",
+        lastLogin: null,
       });
 
     console.log(
@@ -57,9 +82,19 @@ exports.registerAdmin = async (
     res.status(201).json({
       success: true,
       message:
-        "Admin Registered Successfully",
+        "Admin registered successfully. Waiting for activation.",
+      admin: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        status:
+          admin.status,
+      },
     });
 
+    console.log(
+      "========== REGISTER SUCCESS =========="
+    );
   } catch (error) {
     console.error(
       "========== REGISTER ERROR =========="
@@ -108,6 +143,19 @@ exports.loginAdmin = async (
       password,
     } = req.body;
 
+    // Validation
+    if (
+      !email ||
+      !password
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email and password are required",
+      });
+    }
+
+    // Find admin
     const admin =
       await Admin.findOne({
         email,
@@ -126,6 +174,7 @@ exports.loginAdmin = async (
       });
     }
 
+    // Check password
     const valid =
       await bcrypt.compare(
         password,
@@ -145,6 +194,18 @@ exports.loginAdmin = async (
       });
     }
 
+    // Check account status
+    if (
+      admin.status !==
+      "active"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your account is inactive. Please contact the system administrator.",
+      });
+    }
+
     console.log(
       "Generating Token..."
     );
@@ -158,20 +219,33 @@ exports.loginAdmin = async (
       "Token Generated Successfully"
     );
 
+    // Update last login
+    admin.lastLogin =
+      new Date();
+
+    await admin.save();
+
     res.status(200).json({
       success: true,
+      message:
+        "Login successful",
       token,
       admin: {
         id: admin._id,
         name: admin.name,
         email: admin.email,
+        status:
+          admin.status,
+        lastLogin:
+          admin.lastLogin,
+        createdAt:
+          admin.createdAt,
       },
     });
 
     console.log(
       "========== LOGIN SUCCESS =========="
     );
-
   } catch (error) {
     console.error(
       "========== LOGIN ERROR =========="
@@ -194,6 +268,44 @@ exports.loginAdmin = async (
       message:
         error.message ||
         "Login Failed",
+    });
+  }
+};
+
+// =========================
+// Get Current Admin
+// =========================
+exports.getProfile = async (
+  req,
+  res
+) => {
+  try {
+    const admin =
+      await Admin.findById(
+        req.admin.id
+      ).select(
+        "-password"
+      );
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Admin not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      admin,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch profile",
     });
   }
 };
