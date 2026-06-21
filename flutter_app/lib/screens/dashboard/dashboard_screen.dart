@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-
+import 'health_dashboard_screen.dart';
 import '../../core/constants/api_constants.dart';
-
-import '../../core/services/health_service.dart'; // Adjust path as needed
+import '../../core/services/health_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String token;
@@ -55,6 +54,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // 🚪 Handled Logout Routine
+  void _handleLogout() {
+    // If your app uses an AuthManager to persist the session tokens, wipe it here:
+    // AuthManager().clearToken(); 
+    
+    // Pop completely off the stack back to your Welcome Screen/Login interface
+    Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -73,6 +81,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Pulse AI"),
+        // 🚀 ADDED: Logout Button inside Action Area
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            tooltip: "Logout",
+            onPressed: _handleLogout,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -118,26 +134,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    ListTile(
-                      title: const Text("Nickname"),
-                      subtitle: Text(profile["nickname"] ?? "-"),
-                    ),
-                    ListTile(
-                      title: const Text("Age"),
-                      subtitle: Text(profile["age"]?.toString() ?? "-"),
-                    ),
-                    ListTile(
-                      title: const Text("BMI"),
-                      subtitle: Text(profile["bmi"]?.toString() ?? "-"),
-                    ),
-                    ListTile(
-                      title: const Text("Health Goal"),
-                      subtitle: Text(profile["healthGoal"] ?? "-"),
-                    ),
-                    ListTile(
-                      title: const Text("Activity Level"),
-                      subtitle: Text(profile["activityLevel"] ?? "-"),
-                    ),
+                    ListSideItem("Nickname", profile["nickname"] ?? "-"),
+                    ListSideItem("Age", profile["age"]?.toString() ?? "-"),
+                    ListSideItem("BMI", profile["bmi"]?.toString() ?? "-"),
+                    ListSideItem("Health Goal", profile["healthGoal"] ?? "-"),
+                    ListSideItem("Activity Level", profile["activityLevel"] ?? "-"),
                   ],
                 ),
               ),
@@ -154,7 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          const Icon(Icons.directions_walk, size: 32),
+                          const Icon(Icons.directions_walk, size: 32, color: Colors.orange),
                           const SizedBox(height: 12),
                           Text(
                             stats["steps"]?.toString() ?? "0",
@@ -176,7 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          const Icon(Icons.local_fire_department, size: 32),
+                          const Icon(Icons.local_fire_department, size: 32, color: Colors.redAccent),
                           const SizedBox(height: 12),
                           Text(
                             stats["calories"]?.toString() ?? "0",
@@ -197,106 +198,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 24),
 
             // Health Connect Status
-Card(
-  child: ListTile(
-    leading: const Icon(
-      Icons.favorite,
-      color: Colors.red,
-    ),
-    title: const Text(
-      "Google Health Connect",
-    ),
-    subtitle: Text(
-      devices["healthConnected"] == true
-          ? "Connected"
-          : "Tap to Connect",
-    ),
-    trailing: Icon(
-      devices["healthConnected"] == true
-          ? Icons.check_circle
-          : Icons.link,
-      color: devices["healthConnected"] == true
-          ? Colors.green
-          : Colors.blue,
-    ),
-    onTap: () async {
-      try {
-        bool granted =
-            await HealthService.connect();
-
-        if (!granted) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Health permissions denied",
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.favorite,
+                  color: Colors.red,
                 ),
-              ),
-            );
-          }
-          return;
-        }
-
-        await HealthService.syncToBackend(
-          widget.token,
-        );
-
-        await loadDashboard();
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Health Connect linked successfully",
+                title: const Text("Google Health Connect"),
+                subtitle: Text(
+                  devices["healthConnected"] == true ? "Connected • View Details" : "Tap to Connect",
+                ),
+                trailing: Icon(
+                  devices["healthConnected"] == true ? Icons.chevron_right_rounded : Icons.link,
+                  color: devices["healthConnected"] == true ? Colors.green : Colors.blue,
+                ),
+                onTap: () async {
+                  // 🚀 ROUTING: Seamlessly forward them directly to the metrics viewer layout page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const HealthDashboardScreen(),
+                    ),
+                  ).then((_) => loadDashboard()); // Reload status after return
+                },
               ),
             ),
-          );
-        }
-      } catch (e) {
-        debugPrint(e.toString());
-      }
-    },
-  ),
-),
             const SizedBox(height: 24),
 
             // Action Buttons
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.sync),
-                label: const Text("Sync Health Data"),
-                onPressed: () async {
-                  try {
-                    await HealthService.connect();
-                    await HealthService.syncToBackend(widget.token);
-                    await loadDashboard();
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Health Data Synced")),
-                      );
-                    }
-                  } catch (e) {
-                    debugPrint('Sync error: $e');
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Sync failed")),
-                      );
-                    }
-                  }
+                icon: const Icon(Icons.analytics_rounded),
+                label: const Text("Open Health Dashboard Screen"),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: const Color(0xff9f6eff),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HealthDashboardScreen()),
+                  ).then((_) => loadDashboard());
                 },
               ),
             ),
-
             const SizedBox(height: 12),
-
-            
           ],
         ),
       ),
+    );
+  }
+
+  Widget ListSideItem(String title, String data) {
+    return ListTile(
+      title: Text(title, style: const TextStyle(fontSize: 14, color: Colors.black54)),
+      trailing: Text(data, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87)),
+      dense: true,
     );
   }
 }

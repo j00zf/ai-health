@@ -2,7 +2,7 @@ class ApiConstants {
   // ==================== BASE URL ====================
   // Change this according to your environment
 
-  static const String baseUrl = 'http://localhost:5000/api';     // For local development
+  static const String baseUrl = 'https://ai-health-da3t.onrender.com/api';     // For local development
   // static const String baseUrl = 'https://your-production-domain.com/api'; // For production
 
   // ==================== AUTH ENDPOINTS ====================

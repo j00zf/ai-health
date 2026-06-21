@@ -6,7 +6,7 @@ import '../../core/services/google_auth_service.dart';
 import '../../core/services/auth_manager.dart';
 
 import '../dashboard/dashboard_screen.dart';
-import '../onboarding/profile_setup_screen.dart';   // ← Correct import
+import '../onboarding/profile_setup_screen.dart';   
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,15 +43,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final String token = result["token"];
       final userData = result["user"];
 
-      // Save token for persistent login
       await AuthManager().saveToken(token);
-      print("✅ Token saved successfully");   // Debug
+      print("✅ Token saved successfully");   
 
       if (userData["profileCompleted"] == false) {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => CompleteProfileScreen(token: token)),
-          (route) => false,                    // ← Fixed
+          (route) => false,                                    
         );
       } else {
         Navigator.pushAndRemoveUntil(
@@ -74,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => loading = true);
 
     final result = await AuthService.googleLogin(
-      name: googleUser.displayName ?? "",
+      name: googleUser.displayName ?? "User",
       email: googleUser.email ?? "",
       firebaseUid: googleUser.uid,
       photoUrl: googleUser.photoURL ?? "",
@@ -144,7 +143,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ==================== UI Widgets (unchanged) ====================
   Widget _buildMeshBackground(BuildContext context) {
     final size = MediaQuery.of(context).size;
     return Container(
@@ -245,13 +243,6 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Colors.white.withOpacity(0.45),
             borderRadius: BorderRadius.circular(32),
             border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 40,
-                offset: const Offset(0, 20),
-              ),
-            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -302,9 +293,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(26),
                         gradient: const LinearGradient(colors: [Color(0xff29ebd4), Color(0xff9f6eff)]),
-                        boxShadow: [
-                          BoxShadow(color: const Color(0xff9f6eff).withOpacity(0.2), blurRadius: 12, offset: const Offset(0, 6)),
-                        ],
                       ),
                       child: ElevatedButton(
                         onPressed: login,
