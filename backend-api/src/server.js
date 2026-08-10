@@ -28,7 +28,7 @@ const healthRoutes = require("./routes/health.routes");
 const profileRoutes = require("./routes/profileRoutes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const deviceRoutes = require("./routes/deviceRoutes");
-
+const recordhealthRoutes = require("./routes/record_routes");
 // Database
 connectDB();
 
@@ -49,7 +49,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", adminUserRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admins", adminRoutes);
-//app.use("/api/records", require("./routes/record_routes"));
+app.use("/api/records", recordhealthRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/health-connect", healthConnectRoutes);
 app.use("/api/health", healthRoutes);
