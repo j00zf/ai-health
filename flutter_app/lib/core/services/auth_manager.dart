@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthManager {
@@ -10,8 +9,9 @@ class AuthManager {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   static const String _tokenKey = 'auth_token';
-  static const String _userKey = 'user_data'; // optional
+  static const String _userKey = 'user_data';
 
+  // ---------- Token ----------
   Future<void> saveToken(String token) async {
     await _storage.write(key: _tokenKey, value: token);
   }
@@ -24,7 +24,13 @@ class AuthManager {
     await _storage.delete(key: _tokenKey);
   }
 
-  // Optional: Save basic user info
+  // Preferred method name used in Dashboard
+  Future<void> clearToken() async {
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _userKey); // also clear user data
+  }
+
+  // ---------- User Data (Optional) ----------
   Future<void> saveUser(Map<String, dynamic> user) async {
     await _storage.write(key: _userKey, value: jsonEncode(user));
   }
@@ -33,5 +39,10 @@ class AuthManager {
     final String? data = await _storage.read(key: _userKey);
     if (data == null) return null;
     return jsonDecode(data) as Map<String, dynamic>;
+  }
+
+  // Clear everything (token + user)
+  Future<void> clearAll() async {
+    await _storage.deleteAll();
   }
 }

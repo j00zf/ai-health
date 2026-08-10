@@ -1,20 +1,20 @@
 {
   "project_info": {
-    "project_number": "316580441902",
-    "project_id": "fitbit-project-4a220",
-    "storage_bucket": "fitbit-project-4a220.firebasestorage.app"
+    "project_number": "594020358294",
+    "project_id": "pulseai-501016",
+    "storage_bucket": "pulseai-501016.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:316580441902:android:62b13ae3ad172b366554bf",
+        "mobilesdk_app_id": "1:594020358294:android:588392273b545f1d638ab7",
         "android_client_info": {
           "package_name": "com.example.flutter_app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "316580441902-91e6egjm3rj0cu4iaial90pgf4rt74s7.apps.googleusercontent.com",
+          "client_id": "594020358294-0ivdd3nabbjafeqmd58vfre8ugdl93g4.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.flutter_app",
@@ -22,24 +22,24 @@
           }
         },
         {
-          "client_id": "316580441902-kh5o6dc8ul3vcdjd3on11qk32n463u07.apps.googleusercontent.com",
+          "client_id": "594020358294-o5f2rh8qknu4hnnhe0i14mjcab4jtru5.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyByRzCPKrtr7UJaoeXskhMCjQxod8ES3j0"
+          "current_key": "AIzaSyCwzsPJnN3d2P_b-2s-Z18nrcMXbCnwYPs"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "316580441902-h843io0qgdoouebcbiir69o7flrj811q.apps.googleusercontent.com",
+              "client_id": "594020358294-o5f2rh8qknu4hnnhe0i14mjcab4jtru5.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "316580441902-hjrtrubnrlejv3naqcccpplnlvt3bc40.apps.googleusercontent.com",
+              "client_id": "594020358294-b4tjc3q1dv6h57khbunibfahhh651a16.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.flutterApp"

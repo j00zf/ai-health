@@ -2,8 +2,8 @@ class ApiConstants {
   // ==================== BASE URL ====================
   // Change this according to your environment
 
-  static const String baseUrl = 'https://ai-health-da3t.onrender.com/api';     // For local development
-  // static const String baseUrl = 'https://your-production-domain.com/api'; // For production
+  //static const String baseUrl = 'https://ai-health-7uvs.vercel.app/';     
+  static const String baseUrl = 'http://72.61.190.92:8080/api'; // For production
 
   // ==================== AUTH ENDPOINTS ====================
   static const String login = '/user/login';

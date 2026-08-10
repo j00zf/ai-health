@@ -10,7 +10,10 @@ import 'screens/dashboard/dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   runApp(const FitbitHealthApp());
 }
@@ -23,17 +26,25 @@ class FitbitHealthApp extends StatelessWidget {
     return MaterialApp(
       title: 'Pulse AI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+        useMaterial3: true,
+      ),
       home: const AuthWrapper(),
       routes: {
+        '/welcome': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+      },
+      onUnknownRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (_) => const WelcomeScreen(),
+        );
       },
     );
   }
 }
 
-// ==================== FIXED AUTH WRAPPER ====================
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
@@ -53,21 +64,32 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<void> _checkAuth() async {
     print("🔍 [AuthWrapper] Checking for saved token...");
-    final token = await AuthManager().getToken();
-    print("🔑 [AuthWrapper] Token found: ${token != null && token.isNotEmpty ? 'YES' : 'NO'}");
 
-    if (mounted) {
-      setState(() {
-        _token = token;
-        _isLoading = false;
-      });
-    }
+    final token = await AuthManager().getToken();
+
+    print(
+      "🔑 [AuthWrapper] Token found: "
+      "${token != null && token.isNotEmpty ? 'YES' : 'NO'}",
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _token = token;
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xff9f6eff),
+          ),
+        ),
+      );
     }
 
     if (_token != null && _token!.isNotEmpty) {

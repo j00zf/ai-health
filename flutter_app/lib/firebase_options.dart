@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDrj_sf575nn_ToJFHDwRMNtzv1Aw8XenQ',
-    appId: '1:316580441902:web:f4aa31b6baa84f096554bf',
-    messagingSenderId: '316580441902',
-    projectId: 'fitbit-project-4a220',
-    authDomain: 'fitbit-project-4a220.firebaseapp.com',
-    storageBucket: 'fitbit-project-4a220.firebasestorage.app',
+    apiKey: 'AIzaSyAnSef-Y3maaxMMOjae8HBEyhiIai3rGeA',
+    appId: '1:594020358294:web:545a4c604d8a74b1638ab7',
+    messagingSenderId: '594020358294',
+    projectId: 'pulseai-501016',
+    authDomain: 'pulseai-501016.firebaseapp.com',
+    storageBucket: 'pulseai-501016.firebasestorage.app',
+    measurementId: 'G-K6JDK5RQQT',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyByRzCPKrtr7UJaoeXskhMCjQxod8ES3j0',
-    appId: '1:316580441902:android:62b13ae3ad172b366554bf',
-    messagingSenderId: '316580441902',
-    projectId: 'fitbit-project-4a220',
-    storageBucket: 'fitbit-project-4a220.firebasestorage.app',
+    apiKey: 'AIzaSyCwzsPJnN3d2P_b-2s-Z18nrcMXbCnwYPs',
+    appId: '1:594020358294:android:588392273b545f1d638ab7',
+    messagingSenderId: '594020358294',
+    projectId: 'pulseai-501016',
+    storageBucket: 'pulseai-501016.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCUtCG7vBVseGyBz6UQN1pGzHRXF2jYpjA',
-    appId: '1:316580441902:ios:14c925c6e27a68ec6554bf',
-    messagingSenderId: '316580441902',
-    projectId: 'fitbit-project-4a220',
-    storageBucket: 'fitbit-project-4a220.firebasestorage.app',
-    iosClientId: '316580441902-hjrtrubnrlejv3naqcccpplnlvt3bc40.apps.googleusercontent.com',
+    apiKey: 'AIzaSyDU4six5ANYXPUILSx2ZwQouDM9-n88paw',
+    appId: '1:594020358294:ios:91f91f03af98512b638ab7',
+    messagingSenderId: '594020358294',
+    projectId: 'pulseai-501016',
+    storageBucket: 'pulseai-501016.firebasestorage.app',
+    androidClientId: '594020358294-0ivdd3nabbjafeqmd58vfre8ugdl93g4.apps.googleusercontent.com',
     iosBundleId: 'com.example.flutterApp',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCUtCG7vBVseGyBz6UQN1pGzHRXF2jYpjA',
-    appId: '1:316580441902:ios:14c925c6e27a68ec6554bf',
-    messagingSenderId: '316580441902',
-    projectId: 'fitbit-project-4a220',
-    storageBucket: 'fitbit-project-4a220.firebasestorage.app',
-    iosClientId: '316580441902-hjrtrubnrlejv3naqcccpplnlvt3bc40.apps.googleusercontent.com',
+    apiKey: 'AIzaSyDU4six5ANYXPUILSx2ZwQouDM9-n88paw',
+    appId: '1:594020358294:ios:91f91f03af98512b638ab7',
+    messagingSenderId: '594020358294',
+    projectId: 'pulseai-501016',
+    storageBucket: 'pulseai-501016.firebasestorage.app',
+    androidClientId: '594020358294-0ivdd3nabbjafeqmd58vfre8ugdl93g4.apps.googleusercontent.com',
     iosBundleId: 'com.example.flutterApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDrj_sf575nn_ToJFHDwRMNtzv1Aw8XenQ',
-    appId: '1:316580441902:web:6a0f63ad038396906554bf',
-    messagingSenderId: '316580441902',
-    projectId: 'fitbit-project-4a220',
-    authDomain: 'fitbit-project-4a220.firebaseapp.com',
-    storageBucket: 'fitbit-project-4a220.firebasestorage.app',
+    apiKey: 'AIzaSyAnSef-Y3maaxMMOjae8HBEyhiIai3rGeA',
+    appId: '1:594020358294:web:f9511ca1b426efa9638ab7',
+    messagingSenderId: '594020358294',
+    projectId: 'pulseai-501016',
+    authDomain: 'pulseai-501016.firebaseapp.com',
+    storageBucket: 'pulseai-501016.firebasestorage.app',
+    measurementId: 'G-E9LTFFNZHQ',
   );
 }

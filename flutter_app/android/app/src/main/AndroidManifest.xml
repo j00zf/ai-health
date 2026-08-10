@@ -20,12 +20,20 @@
     <uses-permission android:name="android.permission.health.WRITE_BODY_TEMPERATURE" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
-
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <application
         android:name="${applicationName}"
         android:label="Pulse AI"
         android:icon="@mipmap/ic_launcher">
-
+<activity android:name="com.linusu.flutter_web_auth_2.CallbackActivity" android:exported="true">
+    <intent-filter android:label="flutter_web_auth_2">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="pulseai" android:host="fitbit-auth"/>
+    </intent-filter>
+</activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"
