@@ -53,7 +53,7 @@ app.use("/api/admin/dashboard",adminDashboardRoutes);
 app.use("/api/admins",adminRoutes);
 
 
-
+app.use("/api/records", require("./routes/record_routes"));
 
 app.use("/api/user", userRoutes);
 app.use("/api/health-connect",healthConnectRoutes);
