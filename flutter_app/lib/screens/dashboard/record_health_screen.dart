@@ -1,593 +1,409 @@
-//flutter_app/lib/screens/dashboard/record_health_screen.dart
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
-import 'package:intl/intl.dart';
+import '../../core/services/health_service.dart';
 
-import '../../core/constants/api_constants.dart';
-import '../../core/services/auth_manager.dart';
-import '../../core/services/health_service.dart'; // ← IMPORTANT
-
+/// Shows every day of health data ever recorded for the signed-in user
+/// (steps, heart rate, floors, SpO2, active zone minutes, weight), newest
+/// day first.
 class RecordHealthScreen extends StatefulWidget {
-  final String token;
-
-  const RecordHealthScreen({super.key, required this.token});
+  const RecordHealthScreen({super.key});
 
   @override
   State<RecordHealthScreen> createState() => _RecordHealthScreenState();
 }
 
 class _RecordHealthScreenState extends State<RecordHealthScreen> {
-  bool isLoading = true;
-  bool isSyncing = false;
-  List<Map<String, dynamic>> records = [];
-  String? errorMessage;
-  int currentPage = 1;
-  int totalPages = 1;
-  final int limit = 30;
+  List<Map<String, dynamic>> _records = [];
+  String _source = '';
+  String? _rangeStart;
+  String? _rangeEnd;
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  // ─── Google Health connection status ───────────────────────────────────────
-  bool googleHealthConnected = false;
-  String? googleHealthEmail;
-  String? googleHealthPlatform;
-  String? lastSyncError;
-  List<String> debugLogs = [];
+  // Fallback demo history so the screen is still useful/testable when
+  // Google Health isn't connected or returns nothing.
+  static final List<Map<String, dynamic>> _demoRecords = List.generate(14, (i) {
+    final date = DateTime.now().subtract(Duration(days: i));
+    return {
+      'date':
+          '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      'steps': 5000 + (i * 137) % 6000,
+      'heartRate': 65 + (i * 3) % 20,
+      'floors': 4 + (i % 10),
+      'bloodOxygen': 96.0 + (i % 4) * 0.5,
+      'activeZoneMinutes': 10 + (i * 5) % 40,
+      'weight': 70.5 + (i % 5) * 0.3,
+    };
+  });
 
   @override
   void initState() {
     super.initState();
-    _checkGoogleHealthStatus();
-    loadRecords();
+    _loadHistory();
   }
 
-  // ─── Debug helper ──────────────────────────────────────────────────────────
-  void _addLog(String message) {
-    final time = DateFormat('HH:mm:ss').format(DateTime.now());
+  Future<void> _loadHistory() async {
+    if (!mounted) return;
     setState(() {
-      debugLogs.insert(0, '[$time] $message');
-      if (debugLogs.length > 40) debugLogs.removeLast();
+      _isLoading = true;
+      _errorMessage = null;
     });
-    debugPrint('[RecordHealthScreen] $message');
-  }
-
-  // ─── Check if Google Health is connected ───────────────────────────────────
-  Future<void> _checkGoogleHealthStatus() async {
-    final info = HealthService.connectionInfo;
-    setState(() {
-      googleHealthConnected = info['connected'] == true;
-      googleHealthEmail = info['email'];
-      googleHealthPlatform = info['platform'];
-    });
-
-    if (googleHealthConnected) {
-      _addLog('✅ Google Health API is CONNECTED');
-      _addLog('   Email: ${googleHealthEmail ?? "unknown"}');
-      _addLog('   Platform: ${googleHealthPlatform ?? "unknown"}');
-    } else {
-      _addLog('❌ Google Health API is NOT connected');
-      _addLog('   → Tap "Connect Google Health" to start authentication');
-    }
-  }
-
-  // ─── Connect to Google Health ──────────────────────────────────────────────
-  Future<void> _connectGoogleHealth() async {
-    _addLog('Starting Google Sign-In for Health scopes...');
-    setState(() => isSyncing = true);
 
     try {
-      final success = await HealthService.connect();
+      // Make sure we have an active session; HealthService.connect() is a
+      // no-op sign-in prompt if already connected in this run.
+      final authorized =
+          HealthService.isConnected ? true : await HealthService.connect();
 
-      if (success) {
-        _addLog('✅ Google Health authentication SUCCESS');
-        await _checkGoogleHealthStatus();
-
-        // Automatically sync after successful connect
-        await _syncNow();
-      } else {
-        _addLog('❌ Google Health authentication FAILED or cancelled by user');
+      if (!authorized) {
+        if (!mounted) return;
         setState(() {
-          lastSyncError = 'Google Sign-In failed or was cancelled';
+          _records = _demoRecords;
+          _source = 'Demo Data (Google Health not connected)';
+          _rangeStart = null;
+          _rangeEnd = null;
+          _isLoading = false;
         });
+        return;
       }
-    } catch (e, stack) {
-      _addLog('❌ Exception during connect: $e');
-      _addLog('Stack: $stack');
-      setState(() => lastSyncError = e.toString());
-    } finally {
-      if (mounted) setState(() => isSyncing = false);
-    }
-  }
 
-  // ─── Disconnect ────────────────────────────────────────────────────────────
-  Future<void> _disconnectGoogleHealth() async {
-    _addLog('Disconnecting Google Health...');
-    await HealthService.disconnect();
-    await _checkGoogleHealthStatus();
-    _addLog('Disconnected');
-  }
-
-  // ─── Sync today data from Google Health → Backend ──────────────────────────
-  Future<void> _syncNow() async {
-    if (!HealthService.isConnected) {
-      _addLog('❌ Cannot sync – Google Health is not connected');
-      setState(() => lastSyncError = 'Google Health is not connected');
-      return;
-    }
-
-    setState(() {
-      isSyncing = true;
-      lastSyncError = null;
-    });
-
-    _addLog('Fetching today\'s data from Google Health Cloud API...');
-
-    try {
-      final success = await HealthService.syncToBackend(widget.token);
-
-      if (success) {
-        _addLog('✅ Sync to backend SUCCESS');
-        await loadRecords(); // refresh list
-      } else {
-        _addLog('❌ Sync to backend FAILED');
-        setState(() => lastSyncError = 'Backend rejected the sync');
-      }
-    } catch (e) {
-      _addLog('❌ Sync exception: $e');
-      setState(() => lastSyncError = e.toString());
-    } finally {
-      if (mounted) setState(() => isSyncing = false);
-    }
-  }
-
-  // ─── Load records from your backend ────────────────────────────────────────
-  Future<void> loadRecords({bool loadMore = false}) async {
-    if (!loadMore) {
-      setState(() {
-        isLoading = true;
-        errorMessage = null;
-        currentPage = 1;
-      });
-    }
-
-    try {
-      final response = await Dio().get(
-        "${ApiConstants.baseUrl}/records",
-        queryParameters: {
-          "page": currentPage,
-          "limit": limit,
-        },
-        options: Options(
-          headers: {"Authorization": "Bearer ${widget.token}"},
-        ),
-      );
+      final history = await HealthService.getAllHealthHistory();
+      final records =
+          (history['records'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
       if (!mounted) return;
-
-      final data = response.data;
-      final List<dynamic> list = data["data"] ?? [];
-
       setState(() {
-        if (loadMore) {
-          records.addAll(list.cast<Map<String, dynamic>>());
-        } else {
-          records = list.cast<Map<String, dynamic>>();
-        }
-        totalPages = data["pages"] ?? 1;
-        isLoading = false;
+        _records = records.isNotEmpty ? records : _demoRecords;
+        _source = records.isNotEmpty
+            ? (history['source'] as String? ?? 'Google Health Cloud API')
+            : 'Demo Data (no history found)';
+        _rangeStart = history['rangeStart'] as String?;
+        _rangeEnd = history['rangeEnd'] as String?;
+        _isLoading = false;
       });
-
-      _addLog('Loaded ${records.length} records from backend');
-    } on DioException catch (e) {
-      if (!mounted) return;
-      final msg = e.response?.data?["message"] ?? "Failed to load records";
-      setState(() {
-        isLoading = false;
-        errorMessage = msg;
-      });
-      _addLog('❌ Backend load error: $msg');
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        isLoading = false;
-        errorMessage = "Something went wrong";
+        _records = _demoRecords;
+        _source = 'Demo Data (error loading history)';
+        _isLoading = false;
+        _errorMessage = 'Could not load full history: $e';
       });
-      _addLog('❌ Unexpected error: $e');
     }
   }
 
-  Future<void> _loadMore() async {
-    if (currentPage >= totalPages) return;
-    currentPage++;
-    await loadRecords(loadMore: true);
-  }
-
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return "-";
+  String _formatDisplayDate(String isoDate) {
     try {
-      final date = DateTime.parse(dateStr);
-      return DateFormat("EEE, dd MMM yyyy").format(date);
+      final date = DateTime.parse(isoDate);
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      final today = DateTime.now();
+      final isToday = date.year == today.year &&
+          date.month == today.month &&
+          date.day == today.day;
+      final yesterday = today.subtract(const Duration(days: 1));
+      final isYesterday = date.year == yesterday.year &&
+          date.month == yesterday.month &&
+          date.day == yesterday.day;
+
+      if (isToday) return 'Today';
+      if (isYesterday) return 'Yesterday';
+
+      return '${months[date.month - 1]} ${date.day}, ${date.year}';
     } catch (_) {
-      return dateStr;
+      return isoDate;
     }
   }
 
-  // ─── UI ────────────────────────────────────────────────────────────────────
+  Map<String, dynamic> get _summary {
+    if (_records.isEmpty) {
+      return {'avgSteps': 0, 'avgHr': 0, 'totalDays': 0};
+    }
+    int stepsSum = 0;
+    int hrSum = 0;
+    int hrCount = 0;
+    for (final r in _records) {
+      stepsSum += (r['steps'] as num?)?.toInt() ?? 0;
+      final hr = (r['heartRate'] as num?)?.toInt() ?? 0;
+      if (hr > 0) {
+        hrSum += hr;
+        hrCount++;
+      }
+    }
+    return {
+      'avgSteps': (stepsSum / _records.length).round(),
+      'avgHr': hrCount > 0 ? (hrSum / hrCount).round() : 0,
+      'totalDays': _records.length,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDemo = _source.contains('Demo');
+    final summary = _summary;
+
     return Scaffold(
       backgroundColor: const Color(0xfff4f7f6),
       appBar: AppBar(
         title: const Text(
-          "Health Records",
-          style: TextStyle(fontWeight: FontWeight.bold),
+          "Health Record History",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              _checkGoogleHealthStatus();
-              loadRecords();
-            },
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xff9f6eff)),
+            onPressed: _isLoading ? null : _loadHistory,
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // ═══════════════════════════════════════════════════════════════
-          //  GOOGLE HEALTH STATUS + CONTROLS
-          // ═══════════════════════════════════════════════════════════════
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: googleHealthConnected
-                    ? Colors.green.shade300
-                    : Colors.red.shade200,
-                width: 1.5,
-              ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xff9f6eff)))
+          : RefreshIndicator(
+              onRefresh: _loadHistory,
+              color: const Color(0xff9f6eff),
+              child: _records.isEmpty
+                  ? _buildEmptyState()
+                  : ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        _buildSummaryHeader(isDemo, summary),
+                        const SizedBox(height: 20),
+                        if (_errorMessage != null) ...[
+                          _buildInlineNotice(_errorMessage!),
+                          const SizedBox(height: 16),
+                        ],
+                        Text(
+                          "${_records.length} day${_records.length == 1 ? '' : 's'} recorded",
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black45,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ..._records.map(_buildDayCard),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      googleHealthConnected
-                          ? Icons.check_circle
-                          : Icons.error_outline,
-                      color: googleHealthConnected ? Colors.green : Colors.red,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        googleHealthConnected
-                            ? 'Google Health API Connected'
-                            : 'Google Health API NOT Connected',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: googleHealthConnected
-                              ? Colors.green.shade800
-                              : Colors.red.shade800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (googleHealthConnected) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Email: ${googleHealthEmail ?? "-"}',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                  ),
-                  Text(
-                    'Platform: ${googleHealthPlatform ?? "-"}',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                  ),
-                ],
-                if (lastSyncError != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Last error: $lastSyncError',
-                    style: const TextStyle(fontSize: 12, color: Colors.red),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (!googleHealthConnected)
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: isSyncing
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.link),
-                          label: Text(isSyncing ? 'Connecting...' : 'Connect Google Health'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xff9f6eff),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: isSyncing ? null : _connectGoogleHealth,
-                        ),
-                      )
-                    else ...[
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: isSyncing
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.sync),
-                          label: Text(isSyncing ? 'Syncing...' : 'Sync Now'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: isSyncing ? null : _syncNow,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      OutlinedButton(
-                        onPressed: isSyncing ? null : _disconnectGoogleHealth,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Disconnect'),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+        const Icon(Icons.history_rounded, size: 56, color: Colors.black26),
+        const SizedBox(height: 16),
+        const Center(
+          child: Text(
+            "No health records found yet",
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.black54,
             ),
           ),
+        ),
+        const SizedBox(height: 8),
+        const Center(
+          child: Text(
+            "Pull down to refresh once your device has\nsynced data to Google Health.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.black38),
+          ),
+        ),
+      ],
+    );
+  }
 
-          // ═══════════════════════════════════════════════════════════════
-          //  DEBUG LOGS (expandable)
-          // ═══════════════════════════════════════════════════════════════
-          ExpansionTile(
-            title: const Text(
-              'Debug Logs (Google Health + Backend)',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+  Widget _buildInlineNotice(String message) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 18, color: Colors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
-            initiallyExpanded: !googleHealthConnected,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryHeader(bool isDemo, Map<String, dynamic> summary) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff12c2e9), Color(0xffc471ed), Color(0xfff64f59)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "All-Time Health History",
+            style: TextStyle(
+                color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _source,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          if (_rangeStart != null && _rangeEnd != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              "$_rangeStart  →  $_rangeEnd",
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+          if (isDemo) ...[
+            const SizedBox(height: 6),
+            const Text(
+              "Showing sample data for UI testing",
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 18),
+          Row(
             children: [
-              Container(
-                width: double.infinity,
-                height: 160,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(12),
+              Expanded(
+                child: _buildSummaryStat(
+                  "Avg Steps/day",
+                  "${summary['avgSteps']}",
                 ),
-                child: ListView.builder(
-                  itemCount: debugLogs.length,
-                  itemBuilder: (context, index) {
-                    final log = debugLogs[index];
-                    final isError = log.contains('❌') || log.toLowerCase().contains('error');
-                    return Text(
-                      log,
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 11,
-                        color: isError ? Colors.redAccent : Colors.greenAccent,
-                      ),
-                    );
-                  },
+              ),
+              Container(width: 1, height: 30, color: Colors.white24),
+              Expanded(
+                child: _buildSummaryStat(
+                  "Avg Heart Rate",
+                  summary['avgHr'] > 0 ? "${summary['avgHr']} BPM" : "—",
+                ),
+              ),
+              Container(width: 1, height: 30, color: Colors.white24),
+              Expanded(
+                child: _buildSummaryStat(
+                  "Days Tracked",
+                  "${summary['totalDays']}",
                 ),
               ),
             ],
           ),
-
-          // ═══════════════════════════════════════════════════════════════
-          //  RECORDS LIST
-          // ═══════════════════════════════════════════════════════════════
-          Expanded(
-            child: isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xff9f6eff)),
-                  )
-                : errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(errorMessage!,
-                                style: const TextStyle(color: Colors.red)),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: () => loadRecords(),
-                              child: const Text("Retry"),
-                            ),
-                          ],
-                        ),
-                      )
-                    : records.isEmpty
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Text(
-                                "No health records yet.\n\nConnect Google Health and tap Sync Now to start collecting data.",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey, fontSize: 16),
-                              ),
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: () => loadRecords(),
-                            color: const Color(0xff9f6eff),
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: records.length +
-                                  (currentPage < totalPages ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index == records.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    child: Center(
-                                      child: TextButton(
-                                        onPressed: _loadMore,
-                                        child: const Text("Load more"),
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                final record = records[index];
-                                return _RecordCard(
-                                  record: record,
-                                  formattedDate: _formatDate(record["date"]),
-                                );
-                              },
-                            ),
-                          ),
-          ),
         ],
       ),
     );
   }
-}
 
-class _RecordCard extends StatelessWidget {
-  final Map<String, dynamic> record;
-  final String formattedDate;
-
-  const _RecordCard({
-    required this.record,
-    required this.formattedDate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 14),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  formattedDate,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xff9f6eff).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    record["source"] ?? "Unknown",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xff9f6eff),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _metricChip(Icons.directions_walk, "Steps",
-                    "${record["steps"] ?? 0}"),
-                _metricChip(Icons.local_fire_department, "Calories",
-                    "${record["calories"] ?? 0}"),
-                _metricChip(Icons.bedtime, "Sleep",
-                    "${record["sleepHours"] ?? 0} h"),
-                _metricChip(
-                    Icons.favorite, "HR", "${record["heartRate"] ?? 0}"),
-                _metricChip(Icons.monitor_heart, "Resting HR",
-                    "${record["restingHeartRate"] ?? 0}"),
-                _metricChip(Icons.straighten, "Distance",
-                    "${record["distanceWalked"] ?? 0} km"),
-                _metricChip(Icons.bloodtype, "SpO₂",
-                    "${record["bloodOxygen"] ?? 0}%"),
-                _metricChip(Icons.thermostat, "Temp",
-                    "${record["bodyTemperature"] ?? 0}°"),
-              ],
-            ),
-          ],
+  Widget _buildSummaryStat(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
         ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayCard(Map<String, dynamic> record) {
+    final steps = (record['steps'] as num?)?.toInt() ?? 0;
+    final hr = (record['heartRate'] as num?)?.toInt() ?? 0;
+    final floors = (record['floors'] as num?)?.toInt() ?? 0;
+    final spo2 = (record['bloodOxygen'] as num?)?.toDouble() ?? 0.0;
+    final azm = (record['activeZoneMinutes'] as num?)?.toInt() ?? 0;
+    final weight = (record['weight'] as num?)?.toDouble() ?? 0.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _formatDisplayDate(record['date'] as String? ?? ''),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xff2d3748),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: [
+              _buildMetricChip(Icons.directions_walk_rounded, Colors.orange,
+                  "$steps steps"),
+              _buildMetricChip(Icons.favorite_rounded, Colors.redAccent,
+                  hr > 0 ? "$hr BPM" : "— BPM"),
+              _buildMetricChip(
+                  Icons.stairs_rounded, Colors.purple, "$floors floors"),
+              _buildMetricChip(Icons.air_rounded, Colors.teal,
+                  spo2 > 0 ? "${spo2.toStringAsFixed(1)}% SpO₂" : "— SpO₂"),
+              _buildMetricChip(Icons.local_fire_department_rounded,
+                  Colors.deepOrange, "$azm min AZM"),
+              _buildMetricChip(Icons.monitor_weight_rounded, Colors.blueGrey,
+                  weight > 0 ? "${weight.toStringAsFixed(1)} kg" : "— kg"),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _metricChip(IconData icon, String label, String value) {
-    return Container(
-      width: 150,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Colors.grey[700]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildMetricChip(IconData icon, Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xff4a5568),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
