@@ -573,9 +573,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               // APPLICATION STATS
               // ================================================================
 
-              _buildApplicationStats(
-                stats,
-              ),
+            
 
               const SizedBox(
                 height: 28,
@@ -785,49 +783,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // APPLICATION STATS
   // ---------------------------------------------------------------------------
 
-  Widget _buildApplicationStats(
-    Map<String, dynamic> stats,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          child:
-              _buildStatCard(
-            icon:
-                Icons.directions_walk,
-            color:
-                Colors.orange,
-            value:
-                stats["steps"]
-                        ?.toString() ??
-                    "0",
-            label:
-                "Steps",
-          ),
-        ),
-
-        const SizedBox(
-          width: 14,
-        ),
-
-        Expanded(
-          child:
-              _buildStatCard(
-            icon:
-                Icons.local_fire_department,
-            color:
-                Colors.redAccent,
-            value:
-                stats["calories"]
-                        ?.toString() ??
-                    "0",
-            label:
-                "Calories",
-          ),
-        ),
-      ],
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // HEALTH SECTION HEADER
