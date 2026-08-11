@@ -1,17 +1,12 @@
 const express = require("express");
-
-const router =
-  express.Router();
+const router = express.Router();
 
 const {
   getAllUsers,
-} = require(
-  "../../controllers/admin/user.controller"
-);
+  getUserHealthRecords,
+} = require("../../controllers/admin/user.controller");
 
-router.get(
-  "/all",
-  getAllUsers
-);
+router.get("/all", getAllUsers);
+router.get("/:userId/records", getUserHealthRecords);
 
 module.exports = router;

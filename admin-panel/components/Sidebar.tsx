@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { LayoutDashboard, Users, ShieldAlert, UserCog, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, ShieldAlert, UserCog, LogOut,Activity } from "lucide-react";
 
 interface SidebarProps {
   onLogout: () => void;
@@ -17,6 +17,7 @@ export default function Sidebar({ onLogout }: SidebarProps) {
     { name: "View Users", href: "/users", icon: Users },
     { name: "View Admins", href: "/admin", icon: ShieldAlert },
     { name: "Admin Profile", href: "/admin/profile", icon: UserCog },
+    { name : "Health Dataset", href: "/health", icon: Activity },
   ];
 
   return (

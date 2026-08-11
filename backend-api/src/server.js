@@ -22,6 +22,7 @@ const authRoutes = require("./routes/admin/auth.routes");
 const adminUserRoutes = require("./routes/admin/user.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.routes");
 const adminRoutes = require("./routes/admin/admin.routes");
+const adminHealthRoutes = require("./routes/admin/health.routes");
 const healthConnectRoutes = require("./routes/healthConnectRoutes");
 const userRoutes = require("./routes/user_routes");         // ← fixed: was "./routes/user.routes"
 const healthRoutes = require("./routes/health_routes");     // ← fixed: was "./routes/health.routes"
@@ -51,6 +52,7 @@ app.get("/", (req, res) => {
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", adminUserRoutes);
+app.use("/api/admin/health", adminHealthRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admins", adminRoutes);
 app.use("/api/user", userRoutes);

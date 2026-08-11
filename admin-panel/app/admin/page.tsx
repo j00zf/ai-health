@@ -72,7 +72,7 @@ export default function AdminsPage() {
             <button 
               onClick={fetchAdmins}
               disabled={loading}
-              className="p-2.5 bg-slate-600 hover:bg-zinc-900  rounded-xl transition-colors disabled:opacity-40"
+              className="p-2.5 bg-zinc-900  hover:bg-slate-600  rounded-xl transition-colors disabled:opacity-40"
               title="Refresh Registry"
             >
               <RefreshCw size={14} className={`${loading ? 'animate-spin text-cyan-400' : 'text-zinc-400'}`} />
