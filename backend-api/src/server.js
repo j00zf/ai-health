@@ -23,12 +23,16 @@ const adminUserRoutes = require("./routes/admin/user.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.routes");
 const adminRoutes = require("./routes/admin/admin.routes");
 const healthConnectRoutes = require("./routes/healthConnectRoutes");
-const userRoutes = require("./routes/user.routes");
-const healthRoutes = require("./routes/health.routes");
+const userRoutes = require("./routes/user_routes");         // ← fixed: was "./routes/user.routes"
+const healthRoutes = require("./routes/health_routes");     // ← fixed: was "./routes/health.routes"
 const profileRoutes = require("./routes/profileRoutes");
-const dashboardRoutes = require("./routes/dashboard.routes");
+const dashboardRoutes = require("./routes/dashboard_routes"); // ← fixed: was "./routes/dashboard.routes"
 const deviceRoutes = require("./routes/deviceRoutes");
-const recordhealthRoutes = require("./routes/record_routes");
+// record_routes / recordhealthRoutes removed — consolidated into healthConnectRoutes
+// (models/HealthRecord.js + controllers/healthConnectController.js now own all
+// health-record CRUD, including the paginated /all and delete endpoints that
+// used to live under /api/records)
+
 // Database
 connectDB();
 
@@ -49,7 +53,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", adminUserRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admins", adminRoutes);
-app.use("/api/records", recordhealthRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/health-connect", healthConnectRoutes);
 app.use("/api/health", healthRoutes);
