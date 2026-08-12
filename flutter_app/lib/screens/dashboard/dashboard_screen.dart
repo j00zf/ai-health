@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import 'record_health_screen.dart';
+import 'ai_chat_screen.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/services/auth_manager.dart';
 import '../../core/services/health_service.dart';
@@ -46,6 +50,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String healthRecordStatus = 'Connect Google Health to view your records';
 
+  Timer? _healthRefreshTimer;
+
   // ===========================================================================
   // INIT
   // ===========================================================================
@@ -53,7 +59,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    loadDashboard();
+    _initializeHealthAndDashboard();
+
+    // Keep the dashboard current while it is open. This is intentionally an
+    // in-app foreground refresh; true background sync requires Android
+    // WorkManager/background execution and is not safe to fake with a Timer.
+    _healthRefreshTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _refreshHealthSilently(),
+    );
+  }
+
+  Future<void> _initializeHealthAndDashboard() async {
+    await HealthService.initialize();
+    await loadDashboard();
+  }
+
+  Future<void> _refreshHealthSilently() async {
+    if (!mounted || isLoading || isHealthLoading) return;
+
+    final restored = await HealthService.initialize();
+    if (restored || HealthService.isConnected) {
+      await loadHealthOverview();
+    }
+  }
+
+  @override
+  void dispose() {
+    _healthRefreshTimer?.cancel();
+    super.dispose();
   }
 
   // ===========================================================================
@@ -149,7 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
-      final history = await HealthService.getAllHealthHistory();
+      final history = await HealthService.getAllHealthHistory(daysBack: 30);
 
       final rawRecords = history['records'];
 
@@ -175,6 +209,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           healthRecordStatus = 'Latest available health record';
         }
       });
+
+      // Automatically persist the newest daily record. The backend endpoint
+      // should UPSERT by the authenticated user + record date.
+      if (records.isNotEmpty) {
+        await _autoSyncLatestHealthRecord(records.first);
+      }
     } catch (e) {
       debugPrint('Health overview error: $e');
 
@@ -255,6 +295,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ===========================================================================
+  // AUTOMATIC HEALTH RECORD SAVE
+  // ===========================================================================
+
+  Future<void> _autoSyncLatestHealthRecord(
+    Map<String, dynamic> record,
+  ) async {
+    try {
+      final token = await AuthManager().getToken();
+      if (token == null || token.isEmpty) return;
+
+      final saved = await HealthService.syncLatestRecordToBackend(
+        token,
+        record,
+      );
+
+      debugPrint(
+        '[Dashboard] Automatic health record save: ${saved ? 'success' : 'failed'}',
+      );
+    } catch (e) {
+      debugPrint('[Dashboard] Automatic health record save error: $e');
+    }
+  }
+
+  // ===========================================================================
   // SYNC HEALTH DATA TO BACKEND
   // ===========================================================================
 
@@ -299,8 +363,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         SnackBar(
           content: Text(
             success
-                ? '✅ Health data synced successfully!'
-                : '❌ Server sync failed',
+                ? 'Health data synced successfully!'
+                : ' Sync failed',
           ),
           backgroundColor: success ? Colors.teal : Colors.redAccent,
           duration: const Duration(seconds: 2),
@@ -519,6 +583,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xfff4f7f6),
+
+      // Pulse AI stays accessible in the bottom-right corner.
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: buildAIChatFloatingButton(),
+
       appBar: AppBar(
         title: const Text(
           "Pulse AI",
@@ -1539,6 +1608,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ===========================================================================
+  // FLOATING PULSE AI CHAT BUTTON
+  // ===========================================================================
+
+  Widget buildAIChatFloatingButton() {
+  return FloatingActionButton(
+    heroTag: 'pulse_ai_chat_fab',
+    onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AIChatScreen(
+            token: widget.token,
+            latestHealthRecord: latestHealthRecord,
+          ),
+        ),
+      );
+    },
+    child: const Icon(
+      Symbols.chat_apps_script,
+      size: 24,
+    ),
+    backgroundColor: const Color(0xff2d3748),
+    foregroundColor: Colors.white,
+    elevation: 8,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(18),
+    ),
+  );
+}
   // ===========================================================================
   // SYNC BUTTON
   // ===========================================================================

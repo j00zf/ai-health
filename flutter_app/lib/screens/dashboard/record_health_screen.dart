@@ -19,21 +19,6 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  // Fallback demo history so the screen is still useful/testable when
-  // Google Health isn't connected or returns nothing.
-  static final List<Map<String, dynamic>> _demoRecords = List.generate(14, (i) {
-    final date = DateTime.now().subtract(Duration(days: i));
-    return {
-      'date':
-          '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
-      'steps': 5000 + (i * 137) % 6000,
-      'heartRate': 65 + (i * 3) % 20,
-      'floors': 4 + (i % 10),
-      'bloodOxygen': 96.0 + (i % 4) * 0.5,
-      'activeZoneMinutes': 10 + (i * 5) % 40,
-      'weight': 70.5 + (i % 5) * 0.3,
-    };
-  });
 
   @override
   void initState() {
@@ -57,11 +42,12 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
       if (!authorized) {
         if (!mounted) return;
         setState(() {
-          _records = _demoRecords;
-          _source = 'Demo Data (Google Health not connected)';
+          _records = [];
+          _source = 'Google Health not connected';
           _rangeStart = null;
           _rangeEnd = null;
           _isLoading = false;
+          _errorMessage = 'Connect your Google Health account to view real health records.';
         });
         return;
       }
@@ -72,10 +58,11 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
 
       if (!mounted) return;
       setState(() {
-        _records = records.isNotEmpty ? records : _demoRecords;
-        _source = records.isNotEmpty
-            ? (history['source'] as String? ?? 'Google Health Cloud API')
-            : 'Demo Data (no history found)';
+        _records = records;
+        _source = history['source'] as String? ?? 'Google Health Cloud API';
+        _errorMessage = records.isEmpty
+            ? 'No real Google Health records were found for the selected period.'
+            : null;
         _rangeStart = history['rangeStart'] as String?;
         _rangeEnd = history['rangeEnd'] as String?;
         _isLoading = false;
@@ -83,8 +70,8 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _records = _demoRecords;
-        _source = 'Demo Data (error loading history)';
+        _records = [];
+        _source = 'Google Health Cloud API';
         _isLoading = false;
         _errorMessage = 'Could not load full history: $e';
       });
@@ -140,7 +127,7 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDemo = _source.contains('Demo');
+    final isDemo = false;
     final summary = _summary;
 
     return Scaffold(

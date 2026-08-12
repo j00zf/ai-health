@@ -34,6 +34,8 @@ class HealthService {
   static String? _accessToken;
   static String? _currentPlatform;
   static String? _userEmail;
+  static bool _initialized = false;
+  static bool _isConnecting = false;
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -141,13 +143,52 @@ class HealthService {
   // Connect
   // ---------------------------------------------------------------------------
 
-  static Future<bool> connect() async {
-    _currentPlatform = _platformName;
+  /// Restores the previously selected Google Health account without showing
+  /// the Google account picker again. Google Sign-In manages the underlying
+  /// credential/session; the short-lived OAuth access token is refreshed when
+  /// needed instead of storing an expired token permanently.
+  static Future<bool> initialize() async {
+    if (_initialized && _accessToken != null) return true;
 
+    _currentPlatform = _platformName;
+    _log('Trying silent Google Health sign-in...');
+
+    try {
+      final user = await _googleSignIn.signInSilently();
+      if (user == null) {
+        _initialized = true;
+        _log('No previously authorized Google Health account found.');
+        return false;
+      }
+
+      _userEmail = user.email;
+      final auth = await user.authentication;
+      _accessToken = auth.accessToken;
+      _initialized = true;
+
+      _log('Silently restored Google Health account: ${user.email}');
+      _log('Fresh access token present: ${_accessToken != null}');
+      return _accessToken != null;
+    } catch (e, stack) {
+      _initialized = true;
+      _log('Silent Google Health sign-in failed: $e');
+      _log('Stack: $stack');
+      return false;
+    }
+  }
+
+  static Future<bool> connect() async {
+    if (_isConnecting) return _accessToken != null;
+
+    _isConnecting = true;
+    _currentPlatform = _platformName;
     _log('Starting Google Health Sign-In...');
 
     try {
-      await _googleSignIn.signOut();
+      // First try to restore the existing account. This avoids asking the user
+      // to select/sign in again after app restarts.
+      final restored = await initialize();
+      if (restored) return true;
 
       final user = await _googleSignIn.signIn();
 
@@ -157,6 +198,7 @@ class HealthService {
       }
 
       _userEmail = user.email;
+      _initialized = true;
 
       _log('Signed in as: ${user.email}');
       _log('Display name: ${user.displayName}');
@@ -185,6 +227,8 @@ class HealthService {
       _log('Stack: $stack');
 
       return false;
+    } finally {
+      _isConnecting = false;
     }
   }
 
@@ -199,6 +243,7 @@ class HealthService {
 
     _accessToken = null;
     _userEmail = null;
+    _initialized = false;
 
     _log('Disconnected');
   }
@@ -232,6 +277,27 @@ class HealthService {
 
   static String _iso(DateTime date) {
     return '${date.toIso8601String().split('.').first}Z';
+  }
+
+  /// Makes sure a fresh OAuth access token exists. If the current token has
+  /// expired, Google Sign-In silently restores the same account.
+  static Future<bool> _ensureAuthenticated() async {
+    try {
+      var user = _googleSignIn.currentUser;
+      user ??= await _googleSignIn.signInSilently();
+      if (user == null) return false;
+
+      _userEmail = user.email;
+      final auth = await user.authentication;
+      if (auth.accessToken != null) {
+        _accessToken = auth.accessToken;
+        _initialized = true;
+        return true;
+      }
+    } catch (e) {
+      _log('Unable to refresh Google Health access token: $e');
+    }
+    return initialize();
   }
 
   // ---------------------------------------------------------------------------
@@ -318,6 +384,53 @@ class HealthService {
   }
 
   // ---------------------------------------------------------------------------
+  // Chunked Daily Rollup
+  // ---------------------------------------------------------------------------
+
+  /// The dailyRollUp endpoint rejects any request where
+  /// `windowSizeDays * pageSize` exceeds 90 days (Google returns
+  /// INVALID_ROLLUP_QUERY_DURATION for e.g. a 5-year range). This wrapper
+  /// transparently splits a wide date range into <=90-day windows, fires
+  /// one request per window, and merges all `rollupDataPoints` back into a
+  /// single result — callers don't need to know about the limit.
+  static Future<Map<String, dynamic>?> _fetchDailyRollupChunked(
+    String dataType, {
+    required DateTime startDate,
+    required DateTime endDate,
+    int maxChunkDays = 89, // stay just under Google's 90-day ceiling
+  }) async {
+    if (_accessToken == null) {
+      _log('Cannot fetch $dataType → not connected');
+      return null;
+    }
+
+    final List<dynamic> mergedPoints = [];
+    DateTime chunkStart = startDate;
+
+    while (chunkStart.isBefore(endDate)) {
+      final proposedEnd = chunkStart.add(Duration(days: maxChunkDays));
+      final chunkEnd = proposedEnd.isAfter(endDate) ? endDate : proposedEnd;
+
+      final result = await _fetchDailyRollup(
+        dataType,
+        startDate: chunkStart,
+        endDate: chunkEnd,
+      );
+
+      final points = result?['rollupDataPoints'];
+      if (points is List) {
+        mergedPoints.addAll(points);
+      }
+
+      chunkStart = chunkEnd;
+    }
+
+    _log('$dataType chunked rollup → ${mergedPoints.length} total rows');
+
+    return {'rollupDataPoints': mergedPoints};
+  }
+
+  // ---------------------------------------------------------------------------
   // Normal Data Points
   // ---------------------------------------------------------------------------
 
@@ -396,7 +509,7 @@ class HealthService {
   // ---------------------------------------------------------------------------
 
   static Future<Map<String, dynamic>> getTodayHealthData() async {
-    if (_accessToken == null) {
+    if (!await _ensureAuthenticated()) {
       _log('getTodayHealthData called while disconnected');
 
       return {
@@ -410,7 +523,7 @@ class HealthService {
     final results = await Future.wait([
       _fetchDataPoints('steps'),
       _fetchDataPoints('heart-rate'),
-      _fetchDailyRollup('floors'),
+      _fetchDailyRollupChunked('floors', startDate: _startDate, endDate: _endDate),
       _fetchDataPoints('oxygen-saturation'),
       _fetchDataPoints('active-zone-minutes'),
       _fetchDataPoints('weight'),
@@ -568,7 +681,7 @@ class HealthService {
   static Future<Map<String, dynamic>> getAllHealthHistory({
     int daysBack = 1825, // ~5 years
   }) async {
-    if (_accessToken == null) {
+    if (!await _ensureAuthenticated()) {
       _log('getAllHealthHistory called while disconnected');
 
       return {
@@ -586,7 +699,7 @@ class HealthService {
     final results = await Future.wait([
       _fetchDataPoints('steps', startDate: start, endDate: end),
       _fetchDataPoints('heart-rate', startDate: start, endDate: end),
-      _fetchDailyRollup('floors', startDate: start, endDate: end),
+      _fetchDailyRollupChunked('floors', startDate: start, endDate: end),
       _fetchDataPoints('oxygen-saturation', startDate: start, endDate: end),
       _fetchDataPoints('active-zone-minutes',
           startDate: start, endDate: end),
@@ -652,10 +765,15 @@ class HealthService {
 
         String? dateKey = _dateKeyFromPoint(raw, 'floors');
 
-        // Daily rollups often carry an explicit y/m/d date instead of a
-        // timestamp — fall back to that if present.
+        // Daily rollups don't carry a plain timestamp — Google returns the
+        // bucket date as a y/m/d object, typically under
+        // `civilStartTime.date` or `range.startTime.date` (confirmed against
+        // a known-working reference implementation). Try every shape we've
+        // seen before giving up on this row.
         if (dateKey == null) {
           final dateObj = _dig(raw, [
+            ['civilStartTime', 'date'],
+            ['range', 'startTime', 'date'],
             ['date'],
             ['floors', 'date'],
           ]);
@@ -669,7 +787,10 @@ class HealthService {
           }
         }
 
-        if (dateKey == null) continue;
+        if (dateKey == null) {
+          _log('floors rollup row skipped — no recognizable date field: $raw');
+          continue;
+        }
 
         final value =
             raw['floors']?['count_sum'] ?? raw['floors']?['countSum'];
@@ -734,6 +855,41 @@ class HealthService {
       'totalDaysWithData': records.length,
       'fetchedAt': DateTime.now().toUtc().toIso8601String(),
     };
+  }
+
+  /// Saves the newest daily record to the application backend. The backend
+  /// should upsert by (user, date), so refreshing the same day never creates
+  /// duplicate rows.
+  static Future<bool> syncLatestRecordToBackend(
+    String jwt,
+    Map<String, dynamic> record,
+  ) async {
+    try {
+      final payload = {
+        ...record,
+        'source': 'Google Health Cloud API',
+        'email': _userEmail,
+        'syncedAt': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/health-connect/sync'),
+        headers: {
+          'Authorization': 'Bearer $jwt',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+
+      _log('Latest daily record sync → ${response.statusCode}');
+      if (response.statusCode != 200) {
+        _log('Latest record backend error: ${response.body}');
+      }
+      return response.statusCode == 200;
+    } catch (e) {
+      _log('Latest record sync error: $e');
+      return false;
+    }
   }
 
   // ---------------------------------------------------------------------------
