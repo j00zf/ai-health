@@ -30,7 +30,7 @@ const profileRoutes = require("./routes/profileRoutes");
 const dashboardRoutes = require("./routes/dashboard_routes"); // ← fixed: was "./routes/dashboard.routes"
 const deviceRoutes = require("./routes/deviceRoutes");
 const aiRoutes = require("./routes/aiRoutes");
-// (models/HealthRecord.js + controllers/healthConnectController.js now own all
+const cvRoutes = require("./routes/cvRoutes");
 // health-record CRUD, including the paginated /all and delete endpoints that
 // used to live under /api/records)
 
@@ -62,6 +62,10 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/device", deviceRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/cv", cvRoutes);
+
+
+
 // Server
 const PORT = process.env.PORT || 5000;
 

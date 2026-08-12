@@ -6,10 +6,13 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'record_health_screen.dart';
 import 'ai_chat_screen.dart';
+
 import '../../core/constants/api_constants.dart';
 import '../../core/services/auth_manager.dart';
 import '../../core/services/health_service.dart';
+
 import '../auth/welcome_screen.dart';
+import '../../features/cv/cv_analysis_screen.dart';
 
 /// Unified application dashboard.
 ///
@@ -27,10 +30,12 @@ class DashboardScreen extends StatefulWidget {
   });
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() =>
+      _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState
+    extends State<DashboardScreen> {
   // ===========================================================================
   // DASHBOARD STATE
   // ===========================================================================
@@ -43,12 +48,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? dashboard;
 
   List<Map<String, dynamic>> healthRecords = [];
+
   Map<String, dynamic>? latestHealthRecord;
 
   String? errorMessage;
   String? healthErrorMessage;
 
-  String healthRecordStatus = 'Connect Google Health to view your records';
+  String healthRecordStatus =
+      'Connect Google Health to view your records';
 
   Timer? _healthRefreshTimer;
 
@@ -59,11 +66,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+
     _initializeHealthAndDashboard();
 
-    // Keep the dashboard current while it is open. This is intentionally an
-    // in-app foreground refresh; true background sync requires Android
-    // WorkManager/background execution and is not safe to fake with a Timer.
+    // Keep the dashboard current while it is open.
+    //
+    // This is intentionally an in-app foreground refresh.
+    // True background sync requires Android WorkManager/background execution.
     _healthRefreshTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _refreshHealthSilently(),
@@ -72,14 +81,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _initializeHealthAndDashboard() async {
     await HealthService.initialize();
+
     await loadDashboard();
   }
 
   Future<void> _refreshHealthSilently() async {
-    if (!mounted || isLoading || isHealthLoading) return;
+    if (!mounted ||
+        isLoading ||
+        isHealthLoading) {
+      return;
+    }
 
-    final restored = await HealthService.initialize();
-    if (restored || HealthService.isConnected) {
+    final restored =
+        await HealthService.initialize();
+
+    if (restored ||
+        HealthService.isConnected) {
       await loadHealthOverview();
     }
   }
@@ -87,6 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _healthRefreshTimer?.cancel();
+
     super.dispose();
   }
 
@@ -105,9 +123,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final response = await Dio().get(
         "${ApiConstants.baseUrl}/dashboard",
+
         options: Options(
           headers: {
-            "Authorization": "Bearer ${widget.token}",
+            "Authorization":
+                "Bearer ${widget.token}",
           },
         ),
       );
@@ -115,11 +135,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
 
       setState(() {
-        dashboard = response.data["data"] as Map<String, dynamic>?;
+        dashboard =
+            response.data["data"]
+                as Map<String, dynamic>?;
+
         isLoading = false;
       });
 
-      // If Google Health is already connected, load its records.
+      // If Google Health is already connected,
+      // load its records.
       if (HealthService.isConnected) {
         await loadHealthOverview();
       }
@@ -127,20 +151,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
 
       if (e.response?.statusCode == 401) {
-        debugPrint("Token expired or invalid (401). Logging out...");
+        debugPrint(
+          "Token expired or invalid (401). Logging out...",
+        );
+
         await _forceLogout();
+
         return;
       }
 
       setState(() {
         isLoading = false;
-        errorMessage = "Failed to load dashboard";
+        errorMessage =
+            "Failed to load dashboard";
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text('Failed to load dashboard'),
-          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Failed to load dashboard',
+          ),
+          backgroundColor:
+              Colors.redAccent,
         ),
       );
     } catch (e) {
@@ -148,10 +181,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() {
         isLoading = false;
-        errorMessage = "Something went wrong";
+        errorMessage =
+            "Something went wrong";
       });
 
-      debugPrint('Dashboard load error: $e');
+      debugPrint(
+        'Dashboard load error: $e',
+      );
     }
   }
 
@@ -165,7 +201,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       isHealthLoading = true;
       healthErrorMessage = null;
-      healthRecordStatus = 'Fetching your latest health records...';
+
+      healthRecordStatus =
+          'Fetching your latest health records...';
     });
 
     try {
@@ -174,8 +212,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         setState(() {
           healthRecords = [];
+
           latestHealthRecord = null;
+
           isHealthLoading = false;
+
           healthRecordStatus =
               'Connect Google Health to view your records';
         });
@@ -183,15 +224,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
-      final history = await HealthService.getAllHealthHistory(daysBack: 30);
+      final history =
+          await HealthService.getAllHealthHistory(
+        daysBack: 30,
+      );
 
-      final rawRecords = history['records'];
+      final rawRecords =
+          history['records'];
 
       final records = rawRecords is List
           ? rawRecords
               .whereType<Map>()
               .map(
-                (record) => Map<String, dynamic>.from(record),
+                (record) =>
+                    Map<String, dynamic>.from(
+                  record,
+                ),
               )
               .toList()
           : <Map<String, dynamic>>[];
@@ -200,30 +248,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() {
         healthRecords = records;
-        latestHealthRecord = records.isNotEmpty ? records.first : null;
+
+        latestHealthRecord =
+            records.isNotEmpty
+                ? records.first
+                : null;
+
         isHealthLoading = false;
 
         if (records.isEmpty) {
-          healthRecordStatus = 'No health records found';
+          healthRecordStatus =
+              'No health records found';
         } else {
-          healthRecordStatus = 'Latest available health record';
+          healthRecordStatus =
+              'Latest available health record';
         }
       });
 
-      // Automatically persist the newest daily record. The backend endpoint
-      // should UPSERT by the authenticated user + record date.
+      // Automatically persist the newest daily record.
       if (records.isNotEmpty) {
-        await _autoSyncLatestHealthRecord(records.first);
+        await _autoSyncLatestHealthRecord(
+          records.first,
+        );
       }
     } catch (e) {
-      debugPrint('Health overview error: $e');
+      debugPrint(
+        'Health overview error: $e',
+      );
 
       if (!mounted) return;
 
       setState(() {
         isHealthLoading = false;
-        healthErrorMessage = "Unable to load Google Health data";
-        healthRecordStatus = 'Unable to load Google Health data';
+
+        healthErrorMessage =
+            "Unable to load Google Health data";
+
+        healthRecordStatus =
+            'Unable to load Google Health data';
       });
     }
   }
@@ -239,24 +301,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     setState(() {
       isConnectingHealth = true;
-      healthRecordStatus = 'Connecting to Google Health...';
+
+      healthRecordStatus =
+          'Connecting to Google Health...';
     });
 
     try {
-      final connected = await HealthService.connect();
+      final connected =
+          await HealthService.connect();
 
       if (!mounted) return;
 
       if (!connected) {
         setState(() {
           isConnectingHealth = false;
-          healthRecordStatus = 'Google Health connection cancelled';
+
+          healthRecordStatus =
+              'Google Health connection cancelled';
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           const SnackBar(
-            content: Text("Google Health connection was cancelled."),
-            backgroundColor: Colors.orange,
+            content: Text(
+              "Google Health connection was cancelled.",
+            ),
+            backgroundColor:
+                Colors.orange,
           ),
         );
 
@@ -271,10 +342,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         isConnectingHealth = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text("Google Health connected successfully."),
-          backgroundColor: Colors.teal,
+          content: Text(
+            "Google Health connected successfully.",
+          ),
+          backgroundColor:
+              Colors.teal,
         ),
       );
     } catch (e) {
@@ -282,13 +357,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() {
         isConnectingHealth = false;
-        healthRecordStatus = 'Unable to load Google Health data';
+
+        healthRecordStatus =
+            'Unable to load Google Health data';
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
-          content: Text("Google Health connection failed: $e"),
-          backgroundColor: Colors.redAccent,
+          content: Text(
+            "Google Health connection failed: $e",
+          ),
+          backgroundColor:
+              Colors.redAccent,
         ),
       );
     }
@@ -298,23 +379,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // AUTOMATIC HEALTH RECORD SAVE
   // ===========================================================================
 
-  Future<void> _autoSyncLatestHealthRecord(
+  Future<void>
+      _autoSyncLatestHealthRecord(
     Map<String, dynamic> record,
   ) async {
     try {
-      final token = await AuthManager().getToken();
-      if (token == null || token.isEmpty) return;
+      final token =
+          await AuthManager().getToken();
 
-      final saved = await HealthService.syncLatestRecordToBackend(
+      if (token == null ||
+          token.isEmpty) {
+        return;
+      }
+
+      final saved =
+          await HealthService
+              .syncLatestRecordToBackend(
         token,
         record,
       );
 
       debugPrint(
-        '[Dashboard] Automatic health record save: ${saved ? 'success' : 'failed'}',
+        '[Dashboard] Automatic health record save: '
+        '${saved ? 'success' : 'failed'}',
       );
     } catch (e) {
-      debugPrint('[Dashboard] Automatic health record save error: $e');
+      debugPrint(
+        '[Dashboard] Automatic health record save error: $e',
+      );
     }
   }
 
@@ -323,13 +415,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ===========================================================================
 
   Future<void> syncHealthToBackend() async {
-    if (latestHealthRecord == null && healthRecords.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (latestHealthRecord == null &&
+        healthRecords.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text('No health data available to sync.'),
-          backgroundColor: Colors.orange,
+          content: Text(
+            'No health data available to sync.',
+          ),
+          backgroundColor:
+              Colors.orange,
         ),
       );
+
       return;
     }
 
@@ -340,43 +438,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final token = await AuthManager().getToken();
+      final token =
+          await AuthManager().getToken();
 
       if (token == null) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           const SnackBar(
-            content: Text('No auth token found. Please login first.'),
-            backgroundColor: Colors.orange,
+            content: Text(
+              'No auth token found. Please login first.',
+            ),
+            backgroundColor:
+                Colors.orange,
           ),
         );
 
         return;
       }
 
-      final success = await HealthService.syncToBackend(token);
+      final success =
+          await HealthService.syncToBackend(
+        token,
+      );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Text(
             success
                 ? 'Health data synced successfully!'
-                : ' Sync failed',
+                : 'Sync failed',
           ),
-          backgroundColor: success ? Colors.teal : Colors.redAccent,
-          duration: const Duration(seconds: 2),
+          backgroundColor: success
+              ? Colors.teal
+              : Colors.redAccent,
+          duration:
+              const Duration(seconds: 2),
         ),
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
-          content: Text('Sync error: $e'),
-          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Sync error: $e',
+          ),
+          backgroundColor:
+              Colors.redAccent,
         ),
       );
     } finally {
@@ -397,9 +511,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (!mounted) return;
 
-    Navigator.of(context).pushAndRemoveUntil(
+    Navigator.of(context)
+        .pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => const WelcomeScreen(),
+        builder: (_) =>
+            const WelcomeScreen(),
       ),
       (route) => false,
     );
@@ -410,16 +526,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
       const SnackBar(
-        content: Text("Session expired. Please login again."),
-        backgroundColor: Colors.orange,
+        content: Text(
+          "Session expired. Please login again.",
+        ),
+        backgroundColor:
+            Colors.orange,
       ),
     );
 
-    Navigator.of(context).pushAndRemoveUntil(
+    Navigator.of(context)
+        .pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => const WelcomeScreen(),
+        builder: (_) =>
+            const WelcomeScreen(),
       ),
       (route) => false,
     );
@@ -433,7 +555,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const RecordHealthScreen(),
+        builder: (_) =>
+            const RecordHealthScreen(),
       ),
     ).then((_) {
       loadHealthOverview();
@@ -451,7 +574,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return value.toDouble();
     }
 
-    return double.tryParse(value.toString()) ?? 0;
+    return double.tryParse(
+          value.toString(),
+        ) ??
+        0;
   }
 
   int _toInt(dynamic value) {
@@ -470,8 +596,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double total = 0;
     int count = 0;
 
-    for (final record in healthRecords) {
-      final value = _toDouble(record[key]);
+    for (final record
+        in healthRecords) {
+      final value =
+          _toDouble(record[key]);
 
       // Missing values must not be treated as zero.
       if (value > 0) {
@@ -491,22 +619,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // DATE HELPERS
   // ===========================================================================
 
-  String _localDateKey(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
+  String _localDateKey(
+    DateTime date,
+  ) {
+    final year =
+        date.year.toString().padLeft(
+              4,
+              '0',
+            );
+
+    final month =
+        date.month.toString().padLeft(
+              2,
+              '0',
+            );
+
+    final day =
+        date.day.toString().padLeft(
+              2,
+              '0',
+            );
 
     return '$year-$month-$day';
   }
 
-  String _formatHealthDate(dynamic value) {
+  String _formatHealthDate(
+    dynamic value,
+  ) {
     if (value == null) {
       return "Date unavailable";
     }
 
     try {
-      final date = DateTime.parse(value.toString()).toLocal();
-      final today = DateTime.now();
+      final date =
+          DateTime.parse(
+        value.toString(),
+      ).toLocal();
+
+      final today =
+          DateTime.now();
 
       if (date.year == today.year &&
           date.month == today.month &&
@@ -532,28 +683,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "Dec",
       ];
 
-      return "${months[date.month - 1]} ${date.day}, ${date.year}";
+      return
+          "${months[date.month - 1]} "
+          "${date.day}, "
+          "${date.year}";
     } catch (_) {
       return value.toString();
     }
   }
 
-  String _formatRecordedDate(String? date) {
-    if (date == null || date.isEmpty) {
+  String _formatRecordedDate(
+    String? date,
+  ) {
+    if (date == null ||
+        date.isEmpty) {
       return 'Date unavailable';
     }
 
-    final parsed = DateTime.tryParse(date);
+    final parsed =
+        DateTime.tryParse(date);
 
     if (parsed == null) {
       return date;
     }
 
-    final local = parsed.toLocal();
+    final local =
+        parsed.toLocal();
 
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final year = local.year.toString();
+    final day =
+        local.day.toString().padLeft(
+              2,
+              '0',
+            );
+
+    final month =
+        local.month.toString().padLeft(
+              2,
+              '0',
+            );
+
+    final year =
+        local.year.toString();
 
     return '$day/$month/$year';
   }
@@ -563,145 +733,263 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ===========================================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     if (isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xff9f6eff),
+          child:
+              CircularProgressIndicator(
+            color:
+                Color(0xff9f6eff),
           ),
         ),
       );
     }
 
-    final user = dashboard?["user"] ?? {};
-    final profile = dashboard?["profile"] ?? {};
-    final devices = dashboard?["devices"] ?? {};
+    final user =
+        dashboard?["user"] ?? {};
+
+    final profile =
+        dashboard?["profile"] ?? {};
+
+    final devices =
+        dashboard?["devices"] ?? {};
 
     final healthConnected =
-        HealthService.isConnected || devices["healthConnected"] == true;
+        HealthService.isConnected ||
+            devices["healthConnected"] ==
+                true;
 
     return Scaffold(
-      backgroundColor: const Color(0xfff4f7f6),
+      backgroundColor:
+          const Color(0xfff4f7f6),
 
-      // Pulse AI stays accessible in the bottom-right corner.
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: buildAIChatFloatingButton(),
+      // =======================================================================
+      // BOTH FLOATING BUTTONS
+      // =======================================================================
+
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.endFloat,
+
+      floatingActionButton:
+          Column(
+        mainAxisSize:
+            MainAxisSize.min,
+
+        crossAxisAlignment:
+            CrossAxisAlignment.end,
+
+        children: [
+          // ---------------------------------------------------------------
+          // COMPUTER VISION BUTTON
+          // ---------------------------------------------------------------
+
+          buildCVFloatingButton(),
+
+          const SizedBox(
+            height: 12,
+          ),
+
+          // ---------------------------------------------------------------
+          // PULSE AI CHAT BUTTON
+          // ---------------------------------------------------------------
+
+          buildAIChatFloatingButton(),
+        ],
+      ),
+
+      // =====================================================================
+      // APP BAR
+      // =====================================================================
 
       appBar: AppBar(
         title: const Text(
           "Pulse AI",
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+
+        backgroundColor:
+            Colors.white,
+
         elevation: 0,
+
         actions: [
           IconButton(
-            tooltip: "All Health Records",
+            tooltip:
+                "All Health Records",
+
             icon: const Icon(
               Icons.history_rounded,
-              color: Color(0xff9f6eff),
+              color:
+                  Color(0xff9f6eff),
             ),
-            onPressed: _openAllRecords,
+
+            onPressed:
+                _openAllRecords,
           ),
+
           IconButton(
-            tooltip: "Refresh",
+            tooltip:
+                "Refresh",
+
             icon: const Icon(
-              Icons.cloud_download_rounded,
-              color: Color(0xff9f6eff),
+              Icons
+                  .cloud_download_rounded,
+              color:
+                  Color(0xff9f6eff),
             ),
-            onPressed: isHealthLoading ? null : _refreshAll,
+
+            onPressed:
+                isHealthLoading
+                    ? null
+                    : _refreshAll,
           ),
+
           IconButton(
             icon: const Icon(
               Icons.logout_rounded,
-              color: Colors.redAccent,
+              color:
+                  Colors.redAccent,
             ),
-            tooltip: "Logout",
-            onPressed: _handleLogout,
+
+            tooltip:
+                "Logout",
+
+            onPressed:
+                _handleLogout,
           ),
         ],
       ),
+
+      // =====================================================================
+      // BODY
+      // =====================================================================
+
       body: RefreshIndicator(
         onRefresh: _refreshAll,
-        color: const Color(0xff9f6eff),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+
+        color:
+            const Color(0xff9f6eff),
+
+        child:
+            SingleChildScrollView(
+          physics:
+              const AlwaysScrollableScrollPhysics(),
+
+          padding:
+              const EdgeInsets.all(16),
+
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+
             children: [
-              // =================================================================
+              // ===============================================================
               // USER PROFILE
-              // =================================================================
+              // ===============================================================
 
-              _buildProfileHeader(user),
+              _buildProfileHeader(
+                user,
+              ),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 24,
+              ),
 
-              // =================================================================
+              // ===============================================================
               // PROFILE INFORMATION
-              // =================================================================
+              // ===============================================================
 
-              _buildProfileCard(profile),
+              _buildProfileCard(
+                profile,
+              ),
 
-              const SizedBox(height: 28),
+              const SizedBox(
+                height: 28,
+              ),
 
-              // =================================================================
+              // ===============================================================
               // GOOGLE HEALTH
-              // =================================================================
+              // ===============================================================
 
               _buildHealthSectionHeader(),
 
-              const SizedBox(height: 12),
+              const SizedBox(
+                height: 12,
+              ),
 
               if (!healthConnected)
                 _buildConnectHealthCard()
               else if (isHealthLoading)
                 _buildHealthLoadingCard()
-              else if (latestHealthRecord != null) ...[
+              else if (latestHealthRecord !=
+                  null) ...[
                 _buildHealthHeader(),
 
-                const SizedBox(height: 16),
+                const SizedBox(
+                  height: 16,
+                ),
 
                 _buildRecordDateCard(),
 
-                const SizedBox(height: 16),
+                const SizedBox(
+                  height: 16,
+                ),
 
                 _buildLatestHealthCard(),
 
-                const SizedBox(height: 26),
+                const SizedBox(
+                  height: 26,
+                ),
 
                 _buildAverageSection(),
-              ] else
+              ]
+              else
                 _buildNoHealthDataCard(),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 24,
+              ),
 
-              // =================================================================
+              // ===============================================================
               // HEALTH HISTORY
-              // =================================================================
+              // ===============================================================
 
               _buildHealthHistoryButton(),
 
-              const SizedBox(height: 14),
+              const SizedBox(
+                height: 14,
+              ),
 
-              // =================================================================
+              // ===============================================================
               // PUSH TO BACKEND
-              // =================================================================
+              // ===============================================================
 
-              if (healthConnected && latestHealthRecord != null)
+              if (healthConnected &&
+                  latestHealthRecord !=
+                      null)
                 _buildSyncButton(),
 
-              const SizedBox(height: 24),
+              // Extra bottom padding so the floating buttons
+              // don't cover the last content.
+              const SizedBox(
+                height: 90,
+              ),
             ],
           ),
         ),
       ),
     );
   }
+
+  // ===========================================================================
+  // REFRESH ALL
+  // ===========================================================================
 
   Future<void> _refreshAll() async {
     await loadDashboard();
@@ -715,42 +1003,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // PROFILE HEADER
   // ===========================================================================
 
-  Widget _buildProfileHeader(Map<String, dynamic> user) {
-    final photo = user["photoUrl"];
+  Widget _buildProfileHeader(
+    Map<String, dynamic> user,
+  ) {
+    final photo =
+        user["photoUrl"];
 
     return Center(
       child: Column(
         children: [
           CircleAvatar(
             radius: 50,
-            backgroundColor: Colors.grey.shade200,
+
+            backgroundColor:
+                Colors.grey.shade200,
+
             backgroundImage:
-                photo != null && photo.toString().isNotEmpty
-                    ? NetworkImage(photo.toString())
+                photo != null &&
+                        photo
+                            .toString()
+                            .isNotEmpty
+                    ? NetworkImage(
+                        photo.toString(),
+                      )
                     : null,
-            child: photo == null || photo.toString().isEmpty
+
+            child: photo == null ||
+                    photo
+                        .toString()
+                        .isEmpty
                 ? const Icon(
                     Icons.person,
                     size: 50,
-                    color: Colors.grey,
+                    color:
+                        Colors.grey,
                   )
                 : null,
           ),
-          const SizedBox(height: 14),
+
+          const SizedBox(
+            height: 14,
+          ),
+
           Text(
-            user["name"] ?? "Unknown User",
-            textAlign: TextAlign.center,
-            style: const TextStyle(
+            user["name"] ??
+                "Unknown User",
+
+            textAlign:
+                TextAlign.center,
+
+            style:
+                const TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 4),
+
+          const SizedBox(
+            height: 4,
+          ),
+
           Text(
             user["email"] ?? "",
-            textAlign: TextAlign.center,
+
+            textAlign:
+                TextAlign.center,
+
             style: TextStyle(
-              color: Colors.grey[600],
+              color:
+                  Colors.grey[600],
             ),
           ),
         ],
@@ -762,33 +1084,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // PROFILE CARD
   // ===========================================================================
 
-  Widget _buildProfileCard(Map<String, dynamic> profile) {
+  Widget _buildProfileCard(
+    Map<String, dynamic> profile,
+  ) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
       ),
+
       child: Column(
         children: [
           _buildInfoTile(
             "Nickname",
-            profile["nickname"]?.toString() ?? "-",
+            profile["nickname"]
+                    ?.toString() ??
+                "-",
           ),
+
           _buildInfoTile(
             "Age",
-            profile["age"]?.toString() ?? "-",
+            profile["age"]
+                    ?.toString() ??
+                "-",
           ),
+
           _buildInfoTile(
             "BMI",
-            profile["bmi"]?.toString() ?? "-",
+            profile["bmi"]
+                    ?.toString() ??
+                "-",
           ),
+
           _buildInfoTile(
             "Health Goal",
-            profile["healthGoal"]?.toString() ?? "-",
+            profile["healthGoal"]
+                    ?.toString() ??
+                "-",
           ),
+
           _buildInfoTile(
             "Activity Level",
-            profile["activityLevel"]?.toString() ?? "-",
+            profile[
+                        "activityLevel"]
+                    ?.toString() ??
+                "-",
           ),
         ],
       ),
@@ -805,33 +1151,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Container(
           width: 42,
           height: 42,
-          decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(12),
+
+          decoration:
+              BoxDecoration(
+            color:
+                Colors.red.withOpacity(
+              0.10,
+            ),
+
+            borderRadius:
+                BorderRadius.circular(
+              12,
+            ),
           ),
+
           child: const Icon(
             Icons.favorite_rounded,
-            color: Colors.redAccent,
+            color:
+                Colors.redAccent,
           ),
         ),
-        const SizedBox(width: 12),
+
+        const SizedBox(
+          width: 12,
+        ),
+
         const Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+
             children: [
               Text(
                 "Health Overview",
-                style: TextStyle(
+
+                style:
+                    TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight:
+                      FontWeight.w800,
                 ),
               ),
-              SizedBox(height: 2),
+
+              SizedBox(
+                height: 2,
+              ),
+
               Text(
                 "Your latest Google Health records",
-                style: TextStyle(
+
+                style:
+                    TextStyle(
                   fontSize: 12,
-                  color: Colors.black45,
+                  color:
+                      Colors.black45,
                 ),
               ),
             ],
@@ -847,46 +1220,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildConnectHealthCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+      padding:
+          const EdgeInsets.all(20),
+
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
         children: [
           Row(
             children: [
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xff9f6eff).withOpacity(0.10),
-                  shape: BoxShape.circle,
+
+                decoration:
+                    BoxDecoration(
+                  color:
+                      const Color(
+                    0xff9f6eff,
+                  ).withOpacity(
+                    0.10,
+                  ),
+
+                  shape:
+                      BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.health_and_safety_rounded,
-                  color: Color(0xff9f6eff),
+
+                child:
+                    const Icon(
+                  Icons
+                      .health_and_safety_rounded,
+                  color:
+                      Color(0xff9f6eff),
                 ),
               ),
-              const SizedBox(width: 12),
+
+              const SizedBox(
+                width: 12,
+              ),
+
               const Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+
                   children: [
                     Text(
                       "Connect Google Health",
-                      style: TextStyle(
+
+                      style:
+                          TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight:
+                            FontWeight.w800,
                       ),
                     ),
-                    SizedBox(height: 3),
+
+                    SizedBox(
+                      height: 3,
+                    ),
+
                     Text(
                       "View your latest health records and averages",
-                      style: TextStyle(
+
+                      style:
+                          TextStyle(
                         fontSize: 11,
-                        color: Colors.black45,
+                        color:
+                            Colors.black45,
                       ),
                     ),
                   ],
@@ -894,34 +1307,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+
+          const SizedBox(
+            height: 18,
+          ),
+
           SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
+            width:
+                double.infinity,
+
+            child:
+                ElevatedButton.icon(
               onPressed:
-                  isConnectingHealth ? null : connectGoogleHealth,
-              icon: isConnectingHealth
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.link_rounded),
+                  isConnectingHealth
+                      ? null
+                      : connectGoogleHealth,
+
+              icon:
+                  isConnectingHealth
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+
+                          child:
+                              CircularProgressIndicator(
+                            strokeWidth:
+                                2,
+                            color:
+                                Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.link_rounded,
+                        ),
+
               label: Text(
                 isConnectingHealth
                     ? "Connecting..."
                     : "Connect Google Health",
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xff9f6eff),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+
+              style:
+                  ElevatedButton.styleFrom(
+                backgroundColor:
+                    const Color(
+                  0xff9f6eff,
+                ),
+
+                foregroundColor:
+                    Colors.white,
+
+                padding:
+                    const EdgeInsets
+                        .symmetric(
+                  vertical: 14,
+                ),
+
                 elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+
+                shape:
+                    RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    14,
+                  ),
                 ),
               ),
             ),
@@ -937,22 +1386,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildHealthLoadingCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(30),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+      width:
+          double.infinity,
+
+      padding:
+          const EdgeInsets.all(30),
+
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
       ),
-      child: const Column(
+
+      child:
+          const Column(
         children: [
           CircularProgressIndicator(
-            color: Color(0xff9f6eff),
+            color:
+                Color(0xff9f6eff),
           ),
-          SizedBox(height: 14),
+
+          SizedBox(
+            height: 14,
+          ),
+
           Text(
             "Loading your health records...",
-            style: TextStyle(
-              color: Colors.black54,
+
+            style:
+                TextStyle(
+              color:
+                  Colors.black54,
               fontSize: 13,
             ),
           ),
@@ -966,102 +1435,182 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ===========================================================================
 
   Widget _buildHealthHeader() {
-    final latest = latestHealthRecord ?? {};
+    final latest =
+        latestHealthRecord ?? {};
 
-    final email = latest['email']?.toString();
+    final email =
+        latest['email']
+            ?.toString();
 
     final source =
-        latest['source']?.toString() ?? 'Google Health Cloud API';
+        latest['source']
+                ?.toString() ??
+            'Google Health Cloud API';
 
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+      padding:
+          const EdgeInsets.all(20),
+
+      decoration:
+          BoxDecoration(
+        gradient:
+            const LinearGradient(
           colors: [
             Color(0xff12c2e9),
             Color(0xffc471ed),
             Color(0xfff64f59),
           ],
         ),
-        borderRadius: BorderRadius.circular(24),
+
+        borderRadius:
+            BorderRadius.circular(
+          24,
+        ),
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
-                  shape: BoxShape.circle,
+                padding:
+                    const EdgeInsets.all(
+                  10,
                 ),
+
+                decoration:
+                    BoxDecoration(
+                  color: Colors.white
+                      .withOpacity(
+                    0.18,
+                  ),
+
+                  shape:
+                      BoxShape.circle,
+                ),
+
                 child: const Icon(
-                  Icons.health_and_safety_rounded,
-                  color: Colors.white,
+                  Icons
+                      .health_and_safety_rounded,
+                  color:
+                      Colors.white,
                   size: 24,
                 ),
               ),
-              const SizedBox(width: 12),
+
+              const SizedBox(
+                width: 12,
+              ),
+
               const Expanded(
                 child: Text(
                   'Google Health Connected',
-                  style: TextStyle(
-                    color: Colors.white,
+
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight:
+                        FontWeight.w800,
                   ),
                 ),
               ),
+
               Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
+                padding:
+                    const EdgeInsets.all(
+                  6,
                 ),
-                child: const Icon(
+
+                decoration:
+                    const BoxDecoration(
+                  color:
+                      Colors.white,
+
+                  shape:
+                      BoxShape.circle,
+                ),
+
+                child:
+                    const Icon(
                   Icons.check_rounded,
-                  color: Colors.teal,
+                  color:
+                      Colors.teal,
                   size: 18,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(
+            height: 16,
+          ),
+
           Text(
             healthRecordStatus,
-            style: const TextStyle(
-              color: Colors.white,
+
+            style:
+                const TextStyle(
+              color:
+                  Colors.white,
               fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontWeight:
+                  FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 6),
+
+          const SizedBox(
+            height: 6,
+          ),
+
           Text(
             source,
-            style: const TextStyle(
-              color: Colors.white70,
+
+            style:
+                const TextStyle(
+              color:
+                  Colors.white70,
               fontSize: 11,
             ),
           ),
-          if (email != null && email.isNotEmpty) ...[
-            const SizedBox(height: 8),
+
+          if (email != null &&
+              email.isNotEmpty) ...[
+            const SizedBox(
+              height: 8,
+            ),
+
             Row(
               children: [
                 const Icon(
-                  Icons.account_circle_outlined,
-                  color: Colors.white70,
+                  Icons
+                      .account_circle_outlined,
+                  color:
+                      Colors.white70,
                   size: 14,
                 ),
-                const SizedBox(width: 5),
+
+                const SizedBox(
+                  width: 5,
+                ),
+
                 Expanded(
                   child: Text(
                     email,
-                    style: const TextStyle(
-                      color: Colors.white70,
+
+                    style:
+                        const TextStyle(
+                      color:
+                          Colors.white70,
                       fontSize: 11,
                     ),
-                    overflow: TextOverflow.ellipsis,
+
+                    overflow:
+                        TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -1077,86 +1626,174 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ===========================================================================
 
   Widget _buildRecordDateCard() {
-    final date = latestHealthRecord?['date']?.toString();
+    final date =
+        latestHealthRecord?['date']
+            ?.toString();
 
-    final isToday = date == _localDateKey(DateTime.now());
+    final isToday =
+        date ==
+            _localDateKey(
+              DateTime.now(),
+            );
 
     return Container(
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.black.withOpacity(0.04),
+      padding:
+          const EdgeInsets.all(17),
+
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
         ),
+
+        border:
+            Border.all(
+          color: Colors.black
+              .withOpacity(
+            0.04,
+          ),
+        ),
+
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black
+                .withOpacity(
+              0.025,
+            ),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset:
+                const Offset(
+              0,
+              4,
+            ),
           ),
         ],
       ),
+
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xff9f6eff).withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
+            padding:
+                const EdgeInsets.all(
+              10,
             ),
-            child: const Icon(
-              Icons.calendar_month_rounded,
-              color: Color(0xff9f6eff),
+
+            decoration:
+                BoxDecoration(
+              color:
+                  const Color(
+                0xff9f6eff,
+              ).withOpacity(
+                0.10,
+              ),
+
+              borderRadius:
+                  BorderRadius.circular(
+                12,
+              ),
+            ),
+
+            child:
+                const Icon(
+              Icons
+                  .calendar_month_rounded,
+              color:
+                  Color(0xff9f6eff),
               size: 22,
             ),
           ),
-          const SizedBox(width: 13),
+
+          const SizedBox(
+            width: 13,
+          ),
+
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+
               children: [
                 Text(
                   isToday
                       ? "Today's Health Record"
                       : 'Latest Recorded Health Data',
-                  style: const TextStyle(
+
+                  style:
+                      const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xff263238),
+                    fontWeight:
+                        FontWeight.w700,
+                    color:
+                        Color(0xff263238),
                   ),
                 ),
-                const SizedBox(height: 4),
+
+                const SizedBox(
+                  height: 4,
+                ),
+
                 Text(
                   date != null
-                      ? _formatRecordedDate(date)
+                      ? _formatRecordedDate(
+                          date,
+                        )
                       : 'No recorded date',
-                  style: const TextStyle(
+
+                  style:
+                      const TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xff9f6eff),
+                    fontWeight:
+                        FontWeight.w800,
+                    color:
+                        Color(0xff9f6eff),
                   ),
                 ),
               ],
             ),
           ),
+
           Container(
-            padding: const EdgeInsets.symmetric(
+            padding:
+                const EdgeInsets.symmetric(
               horizontal: 9,
               vertical: 6,
             ),
-            decoration: BoxDecoration(
+
+            decoration:
+                BoxDecoration(
               color: isToday
-                  ? Colors.teal.withOpacity(0.10)
-                  : Colors.orange.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(10),
+                  ? Colors.teal
+                      .withOpacity(
+                      0.10,
+                    )
+                  : Colors.orange
+                      .withOpacity(
+                      0.10,
+                    ),
+
+              borderRadius:
+                  BorderRadius.circular(
+                10,
+              ),
             ),
+
             child: Text(
-              isToday ? 'TODAY' : 'LATEST',
-              style: TextStyle(
+              isToday
+                  ? 'TODAY'
+                  : 'LATEST',
+
+              style:
+                  TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: isToday ? Colors.teal : Colors.orange,
+                fontWeight:
+                    FontWeight.w800,
+                color: isToday
+                    ? Colors.teal
+                    : Colors.orange,
               ),
             ),
           ),
@@ -1170,129 +1807,256 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ===========================================================================
 
   Widget _buildLatestHealthCard() {
-    final record = latestHealthRecord!;
+    final record =
+        latestHealthRecord!;
 
-    final date = record["date"];
+    final date =
+        record["date"];
 
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+      padding:
+          const EdgeInsets.all(20),
+
+      decoration:
+          BoxDecoration(
+        gradient:
+            const LinearGradient(
+          begin:
+              Alignment.topLeft,
+
+          end:
+              Alignment.bottomRight,
+
           colors: [
             Color(0xff6c5ce7),
             Color(0xff9f6eff),
           ],
         ),
-        borderRadius: BorderRadius.circular(24),
+
+        borderRadius:
+            BorderRadius.circular(
+          24,
+        ),
+
         boxShadow: [
           BoxShadow(
-            color: const Color(0xff9f6eff).withOpacity(0.20),
+            color:
+                const Color(
+              0xff9f6eff,
+            ).withOpacity(
+              0.20,
+            ),
+
             blurRadius: 18,
-            offset: const Offset(0, 8),
+
+            offset:
+                const Offset(
+              0,
+              8,
+            ),
           ),
         ],
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
         children: [
           Row(
             children: [
               const Expanded(
                 child: Text(
                   "Latest Health Record",
-                  style: TextStyle(
-                    color: Colors.white,
+
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight:
+                        FontWeight.w800,
                   ),
                 ),
               ),
+
               Container(
-                padding: const EdgeInsets.symmetric(
+                padding:
+                    const EdgeInsets.symmetric(
                   horizontal: 9,
                   vertical: 5,
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(8),
+
+                decoration:
+                    BoxDecoration(
+                  color: Colors.white
+                      .withOpacity(
+                    0.18,
+                  ),
+
+                  borderRadius:
+                      BorderRadius.circular(
+                    8,
+                  ),
                 ),
-                child: const Text(
+
+                child:
+                    const Text(
                   "LATEST",
-                  style: TextStyle(
-                    color: Colors.white,
+
+                  style:
+                      TextStyle(
+                    color:
+                        Colors.white,
                     fontSize: 9,
-                    fontWeight: FontWeight.w800,
+                    fontWeight:
+                        FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+
+          const SizedBox(
+            height: 6,
+          ),
+
           Row(
             children: [
               const Icon(
-                Icons.calendar_today_rounded,
-                color: Colors.white70,
+                Icons
+                    .calendar_today_rounded,
+                color:
+                    Colors.white70,
                 size: 13,
               ),
-              const SizedBox(width: 6),
+
+              const SizedBox(
+                width: 6,
+              ),
+
               Text(
                 "Recorded ${_formatHealthDate(date)}",
-                style: const TextStyle(
-                  color: Colors.white70,
+
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.white70,
                   fontSize: 11,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+
+          const SizedBox(
+            height: 20,
+          ),
+
           GridView.count(
             crossAxisCount: 2,
+
             crossAxisSpacing: 10,
+
             mainAxisSpacing: 10,
-            childAspectRatio: 1.55,
+
+            childAspectRatio:
+                1.55,
+
             shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+
+            physics:
+                const NeverScrollableScrollPhysics(),
+
             children: [
               _buildHealthMetric(
-                icon: Icons.directions_walk_rounded,
+                icon: Icons
+                    .directions_walk_rounded,
+
                 title: "Steps",
-                value: "${_toInt(record["steps"])}",
-                unit: "steps",
+
+                value:
+                    "${_toInt(record["steps"])}",
+
+                unit:
+                    "steps",
               ),
+
               _buildHealthMetric(
-                icon: Icons.favorite_rounded,
-                title: "Heart Rate",
-                value: "${_toInt(record["heartRate"])}",
-                unit: "BPM",
+                icon: Icons
+                    .favorite_rounded,
+
+                title:
+                    "Heart Rate",
+
+                value:
+                    "${_toInt(record["heartRate"])}",
+
+                unit:
+                    "BPM",
               ),
+
               _buildHealthMetric(
-                icon: Icons.stairs_rounded,
-                title: "Stairs",
-                value: "${_toInt(record["floors"])}",
-                unit: "stairs",
+                icon: Icons
+                    .stairs_rounded,
+
+                title:
+                    "Stairs",
+
+                value:
+                    "${_toInt(record["floors"])}",
+
+                unit:
+                    "stairs",
               ),
+
               _buildHealthMetric(
                 icon: Icons.air_rounded,
-                title: "SpO₂",
-                value: _toDouble(record["bloodOxygen"])
-                    .toStringAsFixed(1),
-                unit: "%",
+
+                title:
+                    "SpO₂",
+
+                value:
+                    _toDouble(
+                  record[
+                      "bloodOxygen"],
+                ).toStringAsFixed(
+                  1,
+                ),
+
+                unit:
+                    "%",
               ),
+
               _buildHealthMetric(
-                icon: Icons.local_fire_department_rounded,
-                title: "Active Zone",
-                value: "${_toInt(record["activeZoneMinutes"])}",
-                unit: "min",
+                icon: Icons
+                    .local_fire_department_rounded,
+
+                title:
+                    "Active Zone",
+
+                value:
+                    "${_toInt(record["activeZoneMinutes"])}",
+
+                unit:
+                    "min",
               ),
+
               _buildHealthMetric(
-                icon: Icons.monitor_weight_rounded,
-                title: "Weight",
-                value: _toDouble(record["weight"])
-                    .toStringAsFixed(1),
-                unit: "kg",
+                icon: Icons
+                    .monitor_weight_rounded,
+
+                title:
+                    "Weight",
+
+                value:
+                    _toDouble(
+                  record["weight"],
+                ).toStringAsFixed(
+                  1,
+                ),
+
+                unit:
+                    "kg",
               ),
             ],
           ),
@@ -1312,53 +2076,100 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String unit,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.13),
-        borderRadius: BorderRadius.circular(14),
+      padding:
+          const EdgeInsets.all(12),
+
+      decoration:
+          BoxDecoration(
+        color: Colors.white
+            .withOpacity(
+          0.13,
+        ),
+
+        borderRadius:
+            BorderRadius.circular(
+          14,
+        ),
       ),
+
       child: Row(
         children: [
           Icon(
             icon,
-            color: Colors.white,
+            color:
+                Colors.white,
             size: 22,
           ),
-          const SizedBox(width: 9),
+
+          const SizedBox(
+            width: 9,
+          ),
+
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white70,
+
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white70,
                     fontSize: 9,
                   ),
                 ),
-                const SizedBox(height: 2),
+
+                const SizedBox(
+                  height: 2,
+                ),
+
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.end,
+
                   children: [
                     Flexible(
                       child: Text(
                         value,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+
+                        overflow:
+                            TextOverflow.ellipsis,
+
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white,
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight:
+                              FontWeight.w800,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 3),
+
+                    const SizedBox(
+                      width: 3,
+                    ),
+
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
+                      padding:
+                          const EdgeInsets.only(
+                        bottom: 2,
+                      ),
+
+                      child:
+                          Text(
                         unit,
-                        style: const TextStyle(
-                          color: Colors.white70,
+
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white70,
                           fontSize: 8,
                         ),
                       ),
@@ -1379,94 +2190,208 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildAverageSection() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+
       children: [
         Row(
           children: [
             const Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+
                 children: [
                   Text(
                     "Your Averages",
-                    style: TextStyle(
+
+                    style:
+                        TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.w800,
+                      fontWeight:
+                          FontWeight.w800,
                     ),
                   ),
-                  SizedBox(height: 3),
+
+                  SizedBox(
+                    height: 3,
+                  ),
+
                   Text(
                     "Based on all recorded health days",
-                    style: TextStyle(
+
+                    style:
+                        TextStyle(
                       fontSize: 11,
-                      color: Colors.black45,
+                      color:
+                          Colors.black45,
                     ),
                   ),
                 ],
               ),
             ),
+
             Container(
-              padding: const EdgeInsets.symmetric(
+              padding:
+                  const EdgeInsets.symmetric(
                 horizontal: 10,
                 vertical: 7,
               ),
-              decoration: BoxDecoration(
-                color: const Color(0xff9f6eff).withOpacity(0.10),
-                borderRadius: BorderRadius.circular(10),
+
+              decoration:
+                  BoxDecoration(
+                color:
+                    const Color(
+                  0xff9f6eff,
+                ).withOpacity(
+                  0.10,
+                ),
+
+                borderRadius:
+                    BorderRadius.circular(
+                  10,
+                ),
               ),
-              child: Text(
+
+              child:
+                  Text(
                 "${healthRecords.length} DAYS",
-                style: const TextStyle(
-                  color: Color(0xff9f6eff),
+
+                style:
+                    const TextStyle(
+                  color:
+                      Color(0xff9f6eff),
                   fontSize: 9,
-                  fontWeight: FontWeight.w800,
+                  fontWeight:
+                      FontWeight.w800,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        _buildAverageMetric(
-          icon: Icons.directions_walk_rounded,
-          title: "Average Steps",
-          value: _average("steps").round().toString(),
-          unit: "steps / day",
-          color: Colors.orange,
+
+        const SizedBox(
+          height: 14,
         ),
+
         _buildAverageMetric(
-          icon: Icons.favorite_rounded,
-          title: "Average Heart Rate",
-          value: _average("heartRate").toStringAsFixed(1),
-          unit: "BPM",
-          color: Colors.redAccent,
+          icon: Icons
+              .directions_walk_rounded,
+
+          title:
+              "Average Steps",
+
+          value:
+              _average("steps")
+                  .round()
+                  .toString(),
+
+          unit:
+              "steps / day",
+
+          color:
+              Colors.orange,
         ),
+
         _buildAverageMetric(
-          icon: Icons.stairs_rounded,
-          title: "Average Stairs",
-          value: _average("floors").toStringAsFixed(1),
-          unit: "stairs / day",
-          color: Colors.deepPurple,
+          icon:
+              Icons.favorite_rounded,
+
+          title:
+              "Average Heart Rate",
+
+          value:
+              _average("heartRate")
+                  .toStringAsFixed(
+                1,
+              ),
+
+          unit:
+              "BPM",
+
+          color:
+              Colors.redAccent,
         ),
+
         _buildAverageMetric(
-          icon: Icons.air_rounded,
-          title: "Average SpO₂",
-          value: _average("bloodOxygen").toStringAsFixed(1),
-          unit: "%",
-          color: Colors.teal,
+          icon:
+              Icons.stairs_rounded,
+
+          title:
+              "Average Stairs",
+
+          value:
+              _average("floors")
+                  .toStringAsFixed(
+                1,
+              ),
+
+          unit:
+              "stairs / day",
+
+          color:
+              Colors.deepPurple,
         ),
+
         _buildAverageMetric(
-          icon: Icons.local_fire_department_rounded,
-          title: "Average Active Zone",
-          value: _average("activeZoneMinutes").toStringAsFixed(1),
-          unit: "min / day",
-          color: Colors.deepOrange,
+          icon:
+              Icons.air_rounded,
+
+          title:
+              "Average SpO₂",
+
+          value:
+              _average("bloodOxygen")
+                  .toStringAsFixed(
+                1,
+              ),
+
+          unit:
+              "%",
+
+          color:
+              Colors.teal,
         ),
+
         _buildAverageMetric(
-          icon: Icons.monitor_weight_rounded,
-          title: "Average Weight",
-          value: _average("weight").toStringAsFixed(1),
-          unit: "kg",
-          color: Colors.blueGrey,
+          icon: Icons
+              .local_fire_department_rounded,
+
+          title:
+              "Average Active Zone",
+
+          value:
+              _average(
+                "activeZoneMinutes",
+              ).toStringAsFixed(
+                1,
+              ),
+
+          unit:
+              "min / day",
+
+          color:
+              Colors.deepOrange,
+        ),
+
+        _buildAverageMetric(
+          icon: Icons
+              .monitor_weight_rounded,
+
+          title:
+              "Average Weight",
+
+          value:
+              _average("weight")
+                  .toStringAsFixed(
+                1,
+              ),
+
+          unit:
+              "kg",
+
+          color:
+              Colors.blueGrey,
         ),
       ],
     );
@@ -1480,58 +2405,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required Color color,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(
+      margin:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
+
+      padding:
+          const EdgeInsets.symmetric(
         horizontal: 15,
         vertical: 13,
       ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(17),
+
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          17,
+        ),
       ),
+
       child: Row(
         children: [
           Container(
             width: 42,
             height: 42,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
+
+            decoration:
+                BoxDecoration(
+              color: color
+                  .withOpacity(
+                0.10,
+              ),
+
+              borderRadius:
+                  BorderRadius.circular(
+                12,
+              ),
             ),
+
             child: Icon(
               icon,
               color: color,
               size: 20,
             ),
           ),
-          const SizedBox(width: 12),
+
+          const SizedBox(
+            width: 12,
+          ),
+
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
+
+              style:
+                  const TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Color(0xff374151),
+                fontWeight:
+                    FontWeight.w700,
+                color:
+                    Color(0xff374151),
               ),
             ),
           ),
+
           Text(
             value,
-            style: const TextStyle(
+
+            style:
+                const TextStyle(
               fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: Color(0xff263238),
+              fontWeight:
+                  FontWeight.w800,
+              color:
+                  Color(0xff263238),
             ),
           ),
-          const SizedBox(width: 5),
+
+          const SizedBox(
+            width: 5,
+          ),
+
           SizedBox(
             width: 65,
+
             child: Text(
               unit,
-              style: const TextStyle(
+
+              style:
+                  const TextStyle(
                 fontSize: 9,
-                color: Colors.black38,
-                fontWeight: FontWeight.w600,
+                color:
+                    Colors.black38,
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
           ),
@@ -1546,36 +2516,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildNoHealthDataCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+      width:
+          double.infinity,
+
+      padding:
+          const EdgeInsets.all(25),
+
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
       ),
+
       child: Column(
         children: [
           const Icon(
-            Icons.health_and_safety_outlined,
+            Icons
+                .health_and_safety_outlined,
+
             size: 48,
-            color: Color(0xff9f6eff),
+
+            color:
+                Color(0xff9f6eff),
           ),
-          const SizedBox(height: 12),
+
+          const SizedBox(
+            height: 12,
+          ),
+
           const Text(
             "No health records found",
-            style: TextStyle(
+
+            style:
+                TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight:
+                  FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
+
+          const SizedBox(
+            height: 6,
+          ),
+
           Text(
             healthErrorMessage ??
                 "Your Google Health account is connected, "
                     "but no recorded health data was found.",
-            textAlign: TextAlign.center,
-            style: const TextStyle(
+
+            textAlign:
+                TextAlign.center,
+
+            style:
+                const TextStyle(
               fontSize: 11,
-              color: Colors.black45,
+              color:
+                  Colors.black45,
             ),
           ),
         ],
@@ -1589,20 +2590,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildHealthHistoryButton() {
     return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _openAllRecords,
-        icon: const Icon(Icons.history_rounded),
-        label: const Text("View All Health Records"),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xff9f6eff),
-          side: const BorderSide(
-            color: Color(0xff9f6eff),
+      width:
+          double.infinity,
+
+      child:
+          OutlinedButton.icon(
+        onPressed:
+            _openAllRecords,
+
+        icon: const Icon(
+          Icons.history_rounded,
+        ),
+
+        label: const Text(
+          "View All Health Records",
+        ),
+
+        style:
+            OutlinedButton.styleFrom(
+          foregroundColor:
+              const Color(
+            0xff9f6eff,
           ),
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+
+          side:
+              const BorderSide(
+            color:
+                Color(0xff9f6eff),
           ),
+
+          padding:
+              const EdgeInsets.symmetric(
+            vertical: 15,
+          ),
+
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(
+              15,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // FLOATING COMPUTER VISION BUTTON
+  // ===========================================================================
+
+  Widget buildCVFloatingButton() {
+    return FloatingActionButton(
+      heroTag:
+          'cv_analysis_fab',
+
+      tooltip:
+          'Computer Vision',
+
+      onPressed: () async {
+        await Navigator.push(
+          context,
+
+          MaterialPageRoute(
+            builder: (_) =>
+                const CVAnalysisScreen(),
+          ),
+        );
+      },
+
+      child: const Icon(
+        Icons
+            .face_retouching_natural,
+
+        size: 24,
+      ),
+
+      backgroundColor:
+          const Color(0xff6c5ce7),
+
+      foregroundColor:
+          Colors.white,
+
+      elevation: 8,
+
+      shape:
+          RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.circular(
+          18,
         ),
       ),
     );
@@ -1613,62 +2689,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ===========================================================================
 
   Widget buildAIChatFloatingButton() {
-  return FloatingActionButton(
-    heroTag: 'pulse_ai_chat_fab',
-    onPressed: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AIChatScreen(
-            token: widget.token,
-            latestHealthRecord: latestHealthRecord,
+    return FloatingActionButton(
+      heroTag:
+          'pulse_ai_chat_fab',
+
+      tooltip:
+          'Pulse AI Chat',
+
+      onPressed: () {
+        Navigator.push(
+          context,
+
+          MaterialPageRoute(
+            builder: (_) =>
+                AIChatScreen(
+              token:
+                  widget.token,
+
+              latestHealthRecord:
+                  latestHealthRecord,
+            ),
           ),
+        );
+      },
+
+      child: const Icon(
+        Symbols.chat_apps_script,
+        size: 24,
+      ),
+
+      backgroundColor:
+          const Color(0xff2d3748),
+
+      foregroundColor:
+          Colors.white,
+
+      elevation: 8,
+
+      shape:
+          RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.circular(
+          18,
         ),
-      );
-    },
-    child: const Icon(
-      Symbols.chat_apps_script,
-      size: 24,
-    ),
-    backgroundColor: const Color(0xff2d3748),
-    foregroundColor: Colors.white,
-    elevation: 8,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-    ),
-  );
-}
+      ),
+    );
+  }
+
   // ===========================================================================
   // SYNC BUTTON
   // ===========================================================================
 
   Widget _buildSyncButton() {
     return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: isSyncing ? null : syncHealthToBackend,
+      width:
+          double.infinity,
+
+      child:
+          ElevatedButton.icon(
+        onPressed:
+            isSyncing
+                ? null
+                : syncHealthToBackend,
+
         icon: isSyncing
             ? const SizedBox(
                 width: 17,
                 height: 17,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
+
+                child:
+                    CircularProgressIndicator(
+                  color:
+                      Colors.white,
+
                   strokeWidth: 2,
                 ),
               )
-            : const Icon(Icons.cloud_upload_outlined),
+            : const Icon(
+                Icons
+                    .cloud_upload_outlined,
+              ),
+
         label: Text(
           isSyncing
               ? 'Syncing...'
               : 'Push to Pulse AI Database',
         ),
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: const Color(0xff9f6eff),
-          padding: const EdgeInsets.symmetric(vertical: 15),
+
+        style:
+            ElevatedButton.styleFrom(
+          foregroundColor:
+              Colors.white,
+
+          backgroundColor:
+              const Color(
+            0xff9f6eff,
+          ),
+
+          padding:
+              const EdgeInsets.symmetric(
+            vertical: 15,
+          ),
+
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(
+              14,
+            ),
           ),
         ),
       ),
@@ -1685,19 +2815,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ) {
     return ListTile(
       dense: true,
+
       title: Text(
         title,
-        style: const TextStyle(
+
+        style:
+            const TextStyle(
           fontSize: 14,
-          color: Colors.black54,
+          color:
+              Colors.black54,
         ),
       ),
+
       trailing: Text(
         value,
-        style: const TextStyle(
+
+        style:
+            const TextStyle(
           fontSize: 15,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
+          fontWeight:
+              FontWeight.bold,
+          color:
+              Colors.black87,
         ),
       ),
     );
