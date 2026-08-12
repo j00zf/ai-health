@@ -1,39 +1,122 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- ================================================================ -->
+    <!-- ACTIVITY / HEALTH -->
+    <!-- ================================================================ -->
 
-    <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <uses-permission android:name="android.permission.health.WRITE_STEPS" />
-    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.WRITE_RESTING_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
-    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
-    <uses-permission android:name="android.permission.health.READ_SLEEP" />
-    <uses-permission android:name="android.permission.health.WRITE_SLEEP" />
-    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
-    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
-    <uses-permission android:name="android.permission.health.READ_BLOOD_OXYGEN" />
-    <uses-permission android:name="android.permission.health.WRITE_BLOOD_OXYGEN" />
-    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
-    <uses-permission android:name="android.permission.health.WRITE_BODY_TEMPERATURE" />
-    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
-    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
-    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission
+        android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- ================================================================ -->
+    <!-- CAMERA -->
+    <!-- ================================================================ -->
+
+    <uses-permission
+        android:name="android.permission.CAMERA" />
+
+    <!-- ================================================================ -->
+    <!-- GOOGLE HEALTH CONNECT -->
+    <!-- ================================================================ -->
+
+    <uses-permission
+        android:name="android.permission.health.READ_STEPS" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_STEPS" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_HEART_RATE" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_HEART_RATE" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_RESTING_HEART_RATE" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_SLEEP" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_SLEEP" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_DISTANCE" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_DISTANCE" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_BLOOD_OXYGEN" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_BLOOD_OXYGEN" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_BODY_TEMPERATURE" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_EXERCISE" />
+
+    <uses-permission
+        android:name="android.permission.health.WRITE_EXERCISE" />
+
+    <uses-permission
+        android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE" />
+
+
     <application
         android:name="${applicationName}"
         android:label="Pulse AI"
-        android:icon="@mipmap/ic_launcher">
-<activity android:name="com.linusu.flutter_web_auth_2.CallbackActivity" android:exported="true">
-    <intent-filter android:label="flutter_web_auth_2">
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="pulseai" android:host="fitbit-auth"/>
-    </intent-filter>
-</activity>
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+
+        <!-- ============================================================ -->
+        <!-- FITBIT / WEB AUTH CALLBACK -->
+        <!-- ============================================================ -->
+
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true">
+
+            <intent-filter
+                android:label="flutter_web_auth_2">
+
+                <action
+                    android:name="android.intent.action.VIEW" />
+
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+
+                <category
+                    android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="pulseai"
+                    android:host="fitbit-auth" />
+
+            </intent-filter>
+        </activity>
+
+
+        <!-- ============================================================ -->
+        <!-- MAIN FLUTTER ACTIVITY -->
+        <!-- ============================================================ -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -48,44 +131,96 @@
                 android:resource="@style/NormalTheme" />
 
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+
+                <action
+                    android:name="android.intent.action.MAIN" />
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+
             </intent-filter>
+
         </activity>
+
+
+        <!-- ============================================================ -->
+        <!-- GOOGLE HEALTH CONNECT PERMISSION ACTIVITY -->
+        <!-- ============================================================ -->
 
         <activity
             android:name="com.cronos.flutter_health.PermissionLauncherActivity"
             android:exported="true">
+
             <intent-filter>
-                <action android:name="androidx.health.permissions.action.REQUEST_PERMISSIONS" />
+
+                <action
+                    android:name="androidx.health.permissions.action.REQUEST_PERMISSIONS" />
+
             </intent-filter>
+
         </activity>
+
+
+        <!-- ============================================================ -->
+        <!-- HEALTH PERMISSION USAGE -->
+        <!-- ============================================================ -->
 
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"
             android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
             android:targetActivity=".MainActivity">
+
             <intent-filter>
-                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
-                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+
+                <action
+                    android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+
+                <category
+                    android:name="android.intent.category.HEALTH_PERMISSIONS" />
+
             </intent-filter>
+
         </activity-alias>
+
+
+        <!-- ============================================================ -->
+        <!-- FLUTTER -->
+        <!-- ============================================================ -->
 
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
     </application>
 
+
+    <!-- ================================================================ -->
+    <!-- QUERIES -->
+    <!-- ================================================================ -->
+
     <queries>
-        <package android:name="com.google.android.apps.healthdata" />
+
+        <package
+            android:name="com.google.android.apps.healthdata" />
 
         <intent>
-            <action android:name="androidx.health.permissions.action.REQUEST_PERMISSIONS" />
+
+            <action
+                android:name="androidx.health.permissions.action.REQUEST_PERMISSIONS" />
+
         </intent>
+
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT" />
-            <data android:mimeType="text/plain" />
+
+            <action
+                android:name="android.intent.action.PROCESS_TEXT" />
+
+            <data
+                android:mimeType="text/plain" />
+
         </intent>
+
     </queries>
+
 </manifest>

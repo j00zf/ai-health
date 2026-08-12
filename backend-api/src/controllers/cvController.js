@@ -19,6 +19,8 @@ exports.analyze = async (req, res) => {
       blendshapes,
       skinAppearance,
       derivedSignals,
+      capture,
+      privacy,
     } = req.body;
 
     if (!imageQuality?.faceDetected) {
@@ -77,6 +79,21 @@ exports.analyze = async (req, res) => {
         skinAppearance,
 
         derivedSignals,
+
+        captureMetadata: {
+          captured: capture?.captured === true,
+          captureMethod: capture?.captureMethod || "camera_snapshot",
+          capturedAt: capture?.capturedAt
+            ? new Date(capture.capturedAt)
+            : new Date(),
+          // Raw image is deliberately not persisted by this endpoint.
+          rawImageStored: false,
+        },
+
+        privacy: {
+          rawImageStored: false,
+          consentGiven: privacy?.consentGiven === true,
+        },
 
         healthContext:
           latestHealth

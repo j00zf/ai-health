@@ -134,11 +134,21 @@ class _DashboardScreenState
 
       if (!mounted) return;
 
-      setState(() {
-        dashboard =
-            response.data["data"]
-                as Map<String, dynamic>?;
+      // Dio decodes JSON objects as Map<dynamic, dynamic>.
+      // Convert the dashboard payload explicitly so all widgets receive
+      // Map<String, dynamic> and avoid runtime cast errors.
+      final responseData = response.data;
+      final rawDashboard = responseData is Map
+          ? responseData["data"]
+          : null;
 
+      final Map<String, dynamic> dashboardData =
+          rawDashboard is Map
+              ? Map<String, dynamic>.from(rawDashboard)
+              : <String, dynamic>{};
+
+      setState(() {
+        dashboard = dashboardData;
         isLoading = false;
       });
 
@@ -748,14 +758,28 @@ class _DashboardScreenState
       );
     }
 
-    final user =
-        dashboard?["user"] ?? {};
+    // Normalize every nested JSON object before passing it to widgets.
+    // Without this conversion, a fallback `{}` becomes Map<dynamic, dynamic>
+    // and causes the runtime error:
+    // _Map<dynamic, dynamic> is not a subtype of Map<String, dynamic>.
+    final rawUser = dashboard?["user"];
+    final rawProfile = dashboard?["profile"];
+    final rawDevices = dashboard?["devices"];
 
-    final profile =
-        dashboard?["profile"] ?? {};
+    final Map<String, dynamic> user =
+        rawUser is Map
+            ? Map<String, dynamic>.from(rawUser)
+            : <String, dynamic>{};
 
-    final devices =
-        dashboard?["devices"] ?? {};
+    final Map<String, dynamic> profile =
+        rawProfile is Map
+            ? Map<String, dynamic>.from(rawProfile)
+            : <String, dynamic>{};
+
+    final Map<String, dynamic> devices =
+        rawDevices is Map
+            ? Map<String, dynamic>.from(rawDevices)
+            : <String, dynamic>{};
 
     final healthConnected =
         HealthService.isConnected ||

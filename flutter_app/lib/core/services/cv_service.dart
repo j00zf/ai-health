@@ -49,6 +49,14 @@ class CVService {
     return _decode(response);
   }
 
+  // Convenience method used by the camera capture flow.
+  // It sends only extracted CV data; the raw camera image is not uploaded.
+  Future<Map<String, dynamic>> saveCapture({
+    required Map<String, dynamic> features,
+  }) async {
+    return analyze(features: features);
+  }
+
   // ===========================================================================
   // LATEST
   // ===========================================================================

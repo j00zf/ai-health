@@ -1,255 +1,178 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/cv_service.dart';
 import 'cv_camera_screen.dart';
 import 'cv_history_screen.dart';
-import 'cv_summary_screen.dart';
-import 'cv_analysis_detail_screen.dart';
 
 class CVAnalysisScreen extends StatefulWidget {
-  const CVAnalysisScreen({
-    super.key,
-  });
+  const CVAnalysisScreen({super.key});
 
   @override
-  State<CVAnalysisScreen> createState() =>
-      _CVAnalysisScreenState();
+  State<CVAnalysisScreen> createState() => _CVAnalysisScreenState();
 }
 
-class _CVAnalysisScreenState
-    extends State<CVAnalysisScreen> {
+class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
+  Map<String, dynamic>? _result;
+  bool _openingCamera = false;
 
-  final CVService _cvService = CVService();
+  Future<void> _captureFace() async {
+    if (_openingCamera) return;
 
-  bool _loading = true;
+    setState(() => _openingCamera = true);
 
-  Map<String, dynamic>? _latest;
-
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLatest();
-  }
-
-  Future<void> _loadLatest() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final response =
-          await _cvService.getLatest();
-
-      if (!mounted) return;
-
-      setState(() {
-        _latest =
-            response['analysis']
-                as Map<String, dynamic>?;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loading = false;
-        _latest = null;
-        _error = e.toString();
-      });
-    }
-  }
-
-  double _number(
-    dynamic value,
-  ) {
-    if (value is num) {
-      return value.toDouble();
-    }
-
-    return double.tryParse(
-          value?.toString() ?? '',
-        ) ??
-        0;
-  }
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Scaffold(
-      backgroundColor:
-          const Color(0xfff5f7fb),
-
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-
-        title: const Row(
-          children: [
-            Icon(
-              Icons.face_retouching_natural,
-              color: Color(0xff6c5ce7),
-            ),
-            SizedBox(width: 10),
-            Text(
-              'CV Analysis',
-              style: TextStyle(
-                color: Color(0xff1f2937),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      body: RefreshIndicator(
-        onRefresh: _loadLatest,
-
-        child: ListView(
-          padding:
-              const EdgeInsets.all(16),
-
-          children: [
-            _buildHeaderCard(),
-
-            const SizedBox(height: 18),
-
-            if (_loading)
-              const Center(
-                child: Padding(
-                  padding:
-                      EdgeInsets.all(40),
-                  child:
-                      CircularProgressIndicator(),
-                ),
-              )
-            else if (_latest != null)
-              _buildLatestAnalysis()
-            else
-              _buildEmptyState(),
-
-            const SizedBox(height: 18),
-
-            _buildActionGrid(),
-
-            const SizedBox(height: 18),
-
-            _buildSafetyCard(),
-          ],
-        ),
-      ),
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const CVCameraScreen()),
     );
+
+    if (!mounted) return;
+
+    setState(() {
+      _openingCamera = false;
+      if (result != null) {
+        _result = result;
+      }
+    });
   }
 
-  Widget _buildHeaderCard() {
-    return Container(
-      padding:
-          const EdgeInsets.all(20),
+  double _number(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
 
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xff6c5ce7),
-            Color(0xff8e7dff),
-          ],
-        ),
+  String _percent(dynamic value) {
+    return '${(_number(value) * 100).round()}%';
+  }
 
-        borderRadius:
-            BorderRadius.circular(24),
-
-        boxShadow: [
-          BoxShadow(
-            color: const Color(
-              0xff6c5ce7,
-            ).withOpacity(.22),
-            blurRadius: 20,
-            offset:
-                const Offset(0, 10),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xfff4f7f6),
+      appBar: AppBar(
+        title: const Text('Computer Vision'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Capture history',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CVHistoryScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
+      body: _result == null ? _buildStartView() : _buildResultView(),
+    );
+  }
 
+  Widget _buildStartView() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.visibility_rounded,
-            color: Colors.white,
-            size: 36,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xff6c5ce7), Color(0xff9f6eff)],
+              ),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.face_retouching_natural,
+                  color: Colors.white,
+                  size: 42,
+                ),
+                SizedBox(height: 18),
+                Text(
+                  'Capture & Analyse Your Face',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'Capture a real camera frame, read facial features on the device, and save the extracted CV data to your account.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
           ),
-
-          const SizedBox(height: 14),
-
+          const SizedBox(height: 24),
           const Text(
-            'Computer Vision Health Signals',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
+            'What will be captured?',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
-
-          const SizedBox(height: 8),
-
-          Text(
-            'Analyze facial features and visual signals over time.',
-            style: TextStyle(
-              color: Colors.white
-                  .withOpacity(.85),
-              fontSize: 14,
-              height: 1.4,
-            ),
+          const SizedBox(height: 14),
+          _featureCard(
+            Icons.remove_red_eye_outlined,
+            'Eye signals',
+            'Eye openness, closure state and blink information.',
           ),
-
-          const SizedBox(height: 18),
-
+          _featureCard(
+            Icons.face_outlined,
+            'Face geometry',
+            'Face size, aspect ratio and relative face area.',
+          ),
+          _featureCard(
+            Icons.screen_rotation_alt_rounded,
+            'Head pose',
+            'Head yaw, pitch and roll from the captured frame.',
+          ),
+          _featureCard(
+            Icons.mood_outlined,
+            'Expression',
+            'Smile probability where supported by ML Kit.',
+          ),
+          _featureCard(
+            Icons.light_mode_outlined,
+            'Appearance',
+            'Basic face-region brightness information.',
+          ),
+          const SizedBox(height: 12),
+          _privacyCard(),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-
             child: ElevatedButton.icon(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const CVCameraScreen(),
-                  ),
-                );
-
-                _loadLatest();
-              },
-
-              icon: const Icon(
-                Icons.camera_alt_rounded,
+              onPressed: _openingCamera ? null : _captureFace,
+              icon: _openingCamera
+                  ? const SizedBox(
+                      width: 19,
+                      height: 19,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.camera_alt_rounded),
+              label: Text(
+                _openingCamera ? 'Opening camera...' : 'Capture Face',
               ),
-
-              label: const Text(
-                'Analyze My Face',
-              ),
-
-              style:
-                  ElevatedButton.styleFrom(
-                backgroundColor:
-                    Colors.white,
-                foregroundColor:
-                    const Color(
-                      0xff6c5ce7,
-                    ),
-                padding:
-                    const EdgeInsets.symmetric(
-                  vertical: 14,
-                ),
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    14,
-                  ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff6c5ce7),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 58),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(17),
                 ),
               ),
             ),
@@ -259,383 +182,328 @@ class _CVAnalysisScreenState
     );
   }
 
-  Widget _buildLatestAnalysis() {
-    final data = _latest!;
-
-    final quality =
-        data['imageQuality']
-            as Map<String, dynamic>?;
-
-    final signals =
-        data['derivedSignals']
-            as Map<String, dynamic>?;
-
-    final eyes =
-        data['eyeSignals']
-            as Map<String, dynamic>?;
-
-    final fatigue =
-        _number(
-      signals?['visualFatigueScore'],
-    );
-
-    final alertness =
-        _number(
-      signals?['alertnessScore'],
-    );
-
-    final eyeClosure =
-        _number(
-      signals?['eyeClosureScore'],
-    );
-
-    final blinkCount =
-        _number(
-      eyes?['blinkCount'],
-    );
-
-    final faceConfidence =
-        _number(
-      quality?['faceConfidence'],
-    );
-
-    return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
-
-      children: [
-        const Text(
-          'Latest Analysis',
-          style: TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            color: Color(0xff1f2937),
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        Container(
-          padding:
-              const EdgeInsets.all(16),
-
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius:
-                BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.black
-                  .withOpacity(.05),
-            ),
-          ),
-
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  _metric(
-                    'Face',
-                    '${(faceConfidence * 100).round()}%',
-                    Icons.face,
-                  ),
-
-                  _metric(
-                    'Fatigue',
-                    '${(fatigue * 100).round()}%',
-                    Icons.bedtime_outlined,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              Row(
-                children: [
-                  _metric(
-                    'Alertness',
-                    '${(alertness * 100).round()}%',
-                    Icons.visibility,
-                  ),
-
-                  _metric(
-                    'Eye closure',
-                    '${(eyeClosure * 100).round()}%',
-                    Icons.remove_red_eye_outlined,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              Row(
-                children: [
-                  _metric(
-                    'Blinks',
-                    blinkCount
-                        .round()
-                        .toString(),
-                    Icons.remove_red_eye,
-                  ),
-
-                  const Spacer(),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              SizedBox(
-                width: double.infinity,
-
-                child: OutlinedButton(
-                  onPressed: () {
-                    final id =
-                        data['_id']
-                            ?.toString();
-
-                    if (id == null) return;
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            CVAnalysisDetailScreen(
-                          analysisId: id,
-                        ),
-                      ),
-                    );
-                  },
-
-                  child: const Text(
-                    'View Full Analysis',
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _metric(
-    String title,
-    String value,
-    IconData icon,
-  ) {
-    return Expanded(
+  Widget _featureCard(IconData icon, String title, String description) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(17),
+      ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
-
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: const Color(
-                0xff6c5ce7,
-              ).withOpacity(.1),
-              borderRadius:
-                  BorderRadius.circular(12),
+              color: const Color(0xff6c5ce7).withOpacity(.10),
+              borderRadius: BorderRadius.circular(13),
             ),
-
-            child: Icon(
-              icon,
-              color:
-                  const Color(0xff6c5ce7),
-              size: 20,
+            child: Icon(icon, color: const Color(0xff6c5ce7)),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.black54,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(width: 9),
+  Widget _privacyCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(.10),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline_rounded, color: Colors.orange),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'The captured frame is read by ML Kit on the device. This backend flow saves extracted CV measurements, not the raw face image. These signals are non-clinical and are not a diagnosis.',
+              style: TextStyle(fontSize: 12, height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+  Widget _buildResultView() {
+    final result = _result ?? {};
+    final quality = _map(result['imageQuality']);
+    final eyes = _map(result['eyeSignals']);
+    final geometry = _map(result['geometry']);
+    final pose = _map(result['headPose']);
+    final skin = _map(result['skinAppearance']);
+    final derived = _map(result['derivedSignals']);
+    final capture = _map(result['captureMetadata']);
+
+    final saved = result['_id'] != null || capture['captured'] == true;
+    final faceDetected = quality['faceDetected'] == true;
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _statusCard(
+            saved: saved,
+            faceDetected: faceDetected,
+            capturedAt: result['capturedAt']?.toString() ?? '',
+          ),
+          const SizedBox(height: 14),
+          Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.black45,
+              Expanded(
+                child: _resultCard(
+                  'Visual fatigue',
+                  _percent(derived['visualFatigueScore']),
+                  Icons.battery_alert_rounded,
                 ),
               ),
-
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight:
-                      FontWeight.w800,
+              const SizedBox(width: 10),
+              Expanded(
+                child: _resultCard(
+                  'Alertness',
+                  _percent(derived['alertnessScore']),
+                  Icons.visibility_rounded,
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      padding:
-          const EdgeInsets.all(28),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(20),
-      ),
-
-      child: Column(
-        children: [
-          const Icon(
-            Icons.face_retouching_natural,
-            size: 55,
-            color: Color(0xff6c5ce7),
+          const SizedBox(height: 14),
+          _section(
+            'Face Quality',
+            Icons.face,
+            [
+              _dataRow('Face detected', faceDetected ? 'Yes' : 'No'),
+              _dataRow('Confidence', _percent(quality['faceConfidence'])),
+              _dataRow('Lighting', _percent(quality['lightingScore'])),
+              _dataRow('Face size', _percent(quality['faceSizeRatio'])),
+            ],
           ),
-
           const SizedBox(height: 12),
-
-          const Text(
-            'No CV analysis yet',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
+          _section(
+            'Eye Signals',
+            Icons.remove_red_eye_outlined,
+            [
+              _dataRow('Left eye openness', _percent(eyes['leftEyeOpenness'])),
+              _dataRow('Right eye openness', _percent(eyes['rightEyeOpenness'])),
+              _dataRow('Blink count', '${eyes['blinkCount'] ?? 0}'),
+              _dataRow(
+                'Prolonged closure',
+                eyes['prolongedEyeClosure'] == true ? 'Yes' : 'No',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _section(
+            'Head Pose',
+            Icons.screen_rotation_alt_rounded,
+            [
+              _dataRow('Yaw', '${_number(pose['yaw']).toStringAsFixed(1)}°'),
+              _dataRow('Pitch', '${_number(pose['pitch']).toStringAsFixed(1)}°'),
+              _dataRow('Roll', '${_number(pose['roll']).toStringAsFixed(1)}°'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _section(
+            'Face Geometry',
+            Icons.grid_3x3_rounded,
+            [
+              _dataRow(
+                'Face aspect ratio',
+                _number(geometry['faceAspectRatio']).toStringAsFixed(3),
+              ),
+              _dataRow(
+                'Face width',
+                '${_number(geometry['faceWidth']).toStringAsFixed(1)} px',
+              ),
+              _dataRow(
+                'Face height',
+                '${_number(geometry['faceHeight']).toStringAsFixed(1)} px',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _section(
+            'Appearance',
+            Icons.light_mode_outlined,
+            [
+              _dataRow(
+                'Brightness',
+                _number(skin['brightnessMean']).toStringAsFixed(1),
+              ),
+              _dataRow('Skin sheen', 'Not clinically measurable'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _section(
+            'Capture & Storage',
+            Icons.save_rounded,
+            [
+              _dataRow('Capture method', capture['captureMethod']?.toString() ?? 'camera_snapshot'),
+              _dataRow('Raw image stored', 'No'),
+              _dataRow('Backend record', saved ? 'Saved' : 'Local result'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xff6c5ce7).withOpacity(.07),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Text(
+              'These are computer-vision indicators. Visual fatigue and alertness are heuristic signals and should not be treated as medical measurements or diagnoses.',
+              style: TextStyle(fontSize: 12, height: 1.5, color: Colors.black54),
             ),
           ),
-
-          const SizedBox(height: 6),
-
-          const Text(
-            'Take your first facial analysis to start building your visual health history.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.black54,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionGrid() {
-    return Row(
-      children: [
-        Expanded(
-          child: _actionCard(
-            icon:
-                Icons.history_rounded,
-            title: 'History',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const CVHistoryScreen(),
-                ),
-              );
-            },
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        Expanded(
-          child: _actionCard(
-            icon:
-                Icons.insights_rounded,
-            title: 'Trends',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const CVSummaryScreen(),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _actionCard({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-
-      borderRadius:
-          BorderRadius.circular(18),
-
-      child: Container(
-        padding:
-            const EdgeInsets.all(18),
-
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius:
-              BorderRadius.circular(18),
-        ),
-
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color:
-                  const Color(0xff6c5ce7),
-              size: 30,
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: _captureFace,
+            icon: const Icon(Icons.camera_alt_rounded),
+            label: const Text('Capture Another Face'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xff6c5ce7),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 54),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 30),
+        ],
       ),
     );
   }
 
-  Widget _buildSafetyCard() {
+  Map<String, dynamic> _map(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  Widget _statusCard({
+    required bool saved,
+    required bool faceDetected,
+    required String capturedAt,
+  }) {
     return Container(
-      padding:
-          const EdgeInsets.all(15),
-
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.orange
-            .withOpacity(.08),
-        borderRadius:
-            BorderRadius.circular(16),
+        color: saved && faceDetected
+            ? Colors.green.withOpacity(.10)
+            : Colors.orange.withOpacity(.10),
+        borderRadius: BorderRadius.circular(20),
       ),
-
-      child: const Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-
+      child: Row(
         children: [
           Icon(
-            Icons.info_outline,
-            color: Colors.orange,
+            saved && faceDetected
+                ? Icons.check_circle_rounded
+                : Icons.info_outline_rounded,
+            color: saved && faceDetected ? Colors.green : Colors.orange,
+            size: 34,
           ),
-
-          SizedBox(width: 10),
-
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              'CV signals are visual indicators only. They do not diagnose medical conditions or confirm fatigue, sweating, or other health conditions.',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  saved ? 'Face captured and saved' : 'Face analysed',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  capturedAt.isEmpty ? 'Just now' : capturedAt,
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _resultCard(String title, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xff6c5ce7)),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String title, IconData icon, List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: const Color(0xff6c5ce7)),
+              const SizedBox(width: 9),
+              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _dataRow(String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          ),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
         ],
       ),
     );

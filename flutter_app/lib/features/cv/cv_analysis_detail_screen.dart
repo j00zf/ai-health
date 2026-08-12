@@ -134,6 +134,10 @@ class _CVAnalysisDetailScreenState
         data['skinAppearance']
             as Map<String, dynamic>?;
 
+    final capture =
+        data['captureMetadata']
+            as Map<String, dynamic>?;
+
     return ListView(
       padding:
           const EdgeInsets.all(16),
@@ -343,6 +347,25 @@ class _CVAnalysisDetailScreenState
               _percent(
                 skin?['confidence'],
               ),
+            ),
+          ],
+        ),
+
+        _section(
+          title: 'Capture & Storage',
+          icon: Icons.camera_alt_rounded,
+          children: [
+            _row(
+              'Capture method',
+              capture?['captureMethod']?.toString() ?? 'camera_snapshot',
+            ),
+            _row(
+              'Face captured',
+              capture?['captured'] == true ? 'Yes' : 'No',
+            ),
+            _row(
+              'Raw image stored',
+              'No',
             ),
           ],
         ),

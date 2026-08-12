@@ -43,6 +43,25 @@ const cvAnalysisSchema = new mongoose.Schema(
       default: "1.0.0",
     },
 
+    // Metadata about the actual camera snapshot used for analysis.
+    // The raw face image is intentionally not persisted by this schema.
+    captureMetadata: {
+      captured: {
+        type: Boolean,
+        default: false,
+      },
+      captureMethod: {
+        type: String,
+        enum: ["camera_snapshot", "live_frame", "image_upload"],
+        default: "camera_snapshot",
+      },
+      capturedAt: Date,
+      rawImageStored: {
+        type: Boolean,
+        default: false,
+      },
+    },
+
     // ========================================================================
     // IMAGE QUALITY
     // ========================================================================
