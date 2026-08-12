@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
-
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -20,9 +18,8 @@ class CVCameraScreen extends StatefulWidget {
       _CVCameraScreenState();
 }
 
-class _CVCameraScreenState
-    extends State<CVCameraScreen> {
-
+class _CVCameraScreenState extends State<CVCameraScreen>
+    with SingleTickerProviderStateMixin {
   // ===========================================================================
   // CAMERA
   // ===========================================================================
@@ -43,60 +40,87 @@ class _CVCameraScreenState
 
   late final FaceDetector _faceDetector;
 
-  bool _isProcessingFrame = false;
-
-  DateTime _lastProcessed =
-      DateTime.fromMillisecondsSinceEpoch(0);
-
-  // Process approximately 4 frames per second.
-  static const Duration _processingInterval =
-      Duration(milliseconds: 250);
-
   // ===========================================================================
-  // LIVE DATA
+  // CV SERVICE
   // ===========================================================================
 
-  int _faceCount = 0;
+  final CVService _cvService = CVService();
 
-  double? _leftEyeOpen;
-
-  double? _rightEyeOpen;
-
-  double? _smileProbability;
-
-  double? _headYaw;
-
-  double? _headPitch;
-
-  double? _headRoll;
-
-  double? _faceWidth;
-
-  double? _faceHeight;
-
-  double? _faceArea;
-
-  double? _faceConfidence;
+  bool _capturing = false;
 
   // ===========================================================================
-  // HISTORY / AGGREGATION
+  // GUIDED SCAN
   // ===========================================================================
 
-  final List<double> _fatigueSamples = [];
+  int _currentStep = 0;
 
-  final List<double> _alertnessSamples = [];
+  bool _scanStarted = false;
 
+  bool _scanCompleted = false;
+
+  String _instruction =
+      'Position your face inside the frame';
+
+  String _subInstruction =
+      'Keep your face centered and look at the camera';
+
+  // ===========================================================================
+  // ANIMATION
+  // ===========================================================================
+
+  late final AnimationController _guideAnimationController;
+
+  // ===========================================================================
+  // CAPTURE RESULTS
+  // ===========================================================================
+
+  final List<Map<String, dynamic>> _captureResults = [];
+
+  // Number of blink-like captured samples detected during the scan.
+  // Kept as a temporal scan metric rather than an ML Kit confidence value.
   int _blinkCount = 0;
 
-  bool _previousEyesClosed = false;
+  // ===========================================================================
+  // GUIDED STEPS
+  // ===========================================================================
 
-  DateTime? _eyesClosedSince;
-
-  double? _skinBrightness;
-
-  // Upload / capture state
-  final CVService _cvService = CVService();
-  bool _capturing = false;
+  final List<_ScanStep> _scanSteps = const [
+    _ScanStep(
+      title: 'Look straight',
+      instruction:
+          'Look directly at the camera',
+      icon: Icons.face_retouching_natural,
+      duration: Duration(milliseconds: 1200),
+    ),
+    _ScanStep(
+      title: 'Turn slightly left',
+      instruction:
+          'Slowly turn your face a little to the left',
+      icon: Icons.keyboard_arrow_left_rounded,
+      duration: Duration(milliseconds: 1300),
+    ),
+    _ScanStep(
+      title: 'Turn slightly right',
+      instruction:
+          'Slowly turn your face a little to the right',
+      icon: Icons.keyboard_arrow_right_rounded,
+      duration: Duration(milliseconds: 1300),
+    ),
+    _ScanStep(
+      title: 'Look slightly up',
+      instruction:
+          'Raise your chin slightly and look up',
+      icon: Icons.keyboard_arrow_up_rounded,
+      duration: Duration(milliseconds: 1300),
+    ),
+    _ScanStep(
+      title: 'Look slightly down',
+      instruction:
+          'Lower your chin slightly and look down',
+      icon: Icons.keyboard_arrow_down_rounded,
+      duration: Duration(milliseconds: 1300),
+    ),
+  ];
 
   // ===========================================================================
   // INIT
@@ -106,18 +130,22 @@ class _CVCameraScreenState
   void initState() {
     super.initState();
 
-    _faceDetector =
-        FaceDetector(
-      options:
-          FaceDetectorOptions(
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
         enableClassification: true,
         enableLandmarks: true,
         enableContours: true,
         enableTracking: true,
-        performanceMode:
-            FaceDetectorMode.fast,
+        performanceMode: FaceDetectorMode.fast,
       ),
     );
+
+    _guideAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(
+        milliseconds: 1200,
+      ),
+    )..repeat(reverse: true);
 
     _initialize();
   }
@@ -141,10 +169,9 @@ class _CVCameraScreenState
           setState(() {
             _initializing = false;
 
-            _error =
-                result.isPermanentlyDenied
-                    ? 'Camera permission is permanently denied.'
-                    : 'Camera permission is required.';
+            _error = result.isPermanentlyDenied
+                ? 'Camera permission is permanently denied.'
+                : 'Camera permission is required.';
           });
 
           return;
@@ -152,9 +179,13 @@ class _CVCameraScreenState
       }
 
       await _initializeCamera();
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint(
-        '[CV] Initialization error: $e',
+        '[CV] Camera initialization error: $e',
+      );
+
+      debugPrint(
+        '[CV] Stack trace: $stackTrace',
       );
 
       if (!mounted) return;
@@ -199,25 +230,37 @@ class _CVCameraScreenState
           _cameras.first;
     }
 
-    _cameraController =
-        CameraController(
+    await _createCameraController(
       selectedCamera,
+    );
+  }
 
+  // ===========================================================================
+  // CREATE CAMERA CONTROLLER
+  // ===========================================================================
+
+  Future<void> _createCameraController(
+    CameraDescription camera,
+  ) async {
+    final controller =
+        CameraController(
+      camera,
       ResolutionPreset.medium,
-
       enableAudio: false,
 
+      // We are intentionally NOT using startImageStream.
+      //
+      // ML Kit analyses the actual JPEG captured by
+      // takePicture(), avoiding the Android YUV/NV21
+      // InputImage conversion problem.
       imageFormatGroup:
-          ImageFormatGroup.yuv420,
+          ImageFormatGroup.jpeg,
     );
 
-    await _cameraController!
-        .initialize();
+    await controller.initialize();
 
-    await _cameraController!
-        .startImageStream(
-      _processCameraImage,
-    );
+    _cameraController =
+        controller;
 
     if (!mounted) return;
 
@@ -229,77 +272,245 @@ class _CVCameraScreenState
   }
 
   // ===========================================================================
-  // CAMERA FRAME PROCESSING
+  // START GUIDED SCAN
   // ===========================================================================
 
-  Future<void> _processCameraImage(
-    CameraImage image,
-  ) async {
-    if (!_cameraInitialized ||
-        _cameraController == null) {
+  Future<void> _startGuidedScan() async {
+    if (_capturing) {
       return;
     }
 
-    if (_isProcessingFrame) {
-      return;
-    }
+    final controller =
+        _cameraController;
 
-    final now = DateTime.now();
-
-    if (now.difference(
-          _lastProcessed,
-        ) <
-        _processingInterval) {
-      return;
-    }
-
-    _lastProcessed = now;
-
-    _isProcessingFrame = true;
-
-    try {
-      final inputImage =
-          _convertCameraImage(
-        image,
-        _cameraController!.description,
+    if (controller == null ||
+        !controller.value.isInitialized) {
+      _showMessage(
+        'Camera is not ready yet.',
+        error: true,
       );
 
-      if (inputImage == null) {
-        return;
+      return;
+    }
+
+    setState(() {
+      _capturing = true;
+      _scanStarted = true;
+      _scanCompleted = false;
+      _currentStep = 0;
+      _captureResults.clear();
+      _blinkCount = 0;
+    });
+
+    try {
+      for (
+        int index = 0;
+        index < _scanSteps.length;
+        index++
+      ) {
+        if (!mounted) return;
+
+        setState(() {
+          _currentStep = index;
+          _instruction =
+              _scanSteps[index].title;
+          _subInstruction =
+              _scanSteps[index].instruction;
+        });
+
+        // ---------------------------------------------------------------
+        // Give the user time to move into position.
+        // ---------------------------------------------------------------
+
+        await Future.delayed(
+          const Duration(
+            milliseconds: 900,
+          ),
+        );
+
+        if (!mounted) return;
+
+        // ---------------------------------------------------------------
+        // Capture real JPEG.
+        // ---------------------------------------------------------------
+
+        final snapshot =
+            await controller.takePicture();
+
+        debugPrint(
+          '[CV] Captured step ${index + 1}: '
+          '${snapshot.path}',
+        );
+
+        // ---------------------------------------------------------------
+        // Analyse exact captured JPEG.
+        // ---------------------------------------------------------------
+
+        final result =
+            await _analyseCapturedImage(
+          snapshot.path,
+          stepIndex: index,
+        );
+
+        if (result != null) {
+          _captureResults.add(
+            result,
+          );
+        }
+
+        // ---------------------------------------------------------------
+        // Small pause before next instruction.
+        // ---------------------------------------------------------------
+
+        if (index <
+            _scanSteps.length - 1) {
+          await Future.delayed(
+            const Duration(
+              milliseconds: 350,
+            ),
+          );
+        }
       }
 
-      final faces =
-          await _faceDetector
-              .processImage(
-        inputImage,
+      // -----------------------------------------------------------------
+      // Validate results.
+      // -----------------------------------------------------------------
+
+      if (_captureResults.isEmpty) {
+        throw Exception(
+          'No face was detected. '
+          'Please make sure your face is clearly visible '
+          'inside the guide and try again.',
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _instruction =
+            'Analysis complete';
+        _subInstruction =
+            'Preparing your results...';
+        _scanCompleted = true;
+      });
+
+      // -----------------------------------------------------------------
+      // Aggregate all captures.
+      // -----------------------------------------------------------------
+
+      final payload =
+          _buildAggregatedPayload();
+
+      debugPrint(
+        '[CV] Valid captures: '
+        '${_captureResults.length}/${_scanSteps.length}',
+      );
+
+      debugPrint(
+        '[CV] Sending CV features to backend...',
+      );
+
+      // -----------------------------------------------------------------
+      // Save through existing authenticated API.
+      // -----------------------------------------------------------------
+
+      final response =
+          await _cvService.analyze(
+        features: payload,
+      );
+
+      final analysis =
+          response['analysis'];
+
+      // -----------------------------------------------------------------
+      // Cleanup.
+      // -----------------------------------------------------------------
+
+      await _stopCamera();
+
+      if (!mounted) return;
+
+      _showMessage(
+        'Face captured and analysed successfully.',
+      );
+
+      Navigator.pop(
+        context,
+        analysis is Map
+            ? Map<String, dynamic>.from(
+                analysis,
+              )
+            : payload,
+      );
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[CV] Guided capture failed: $e',
+      );
+
+      debugPrint(
+        '[CV] Stack trace: $stackTrace',
       );
 
       if (!mounted) return;
 
+      setState(() {
+        _capturing = false;
+        _scanStarted = false;
+        _scanCompleted = false;
+      });
+
+      _showMessage(
+        e.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+        error: true,
+      );
+    }
+  }
+
+  // ===========================================================================
+  // ANALYSE ONE CAPTURED JPEG
+  // ===========================================================================
+
+  Future<Map<String, dynamic>?>
+      _analyseCapturedImage(
+    String path, {
+    required int stepIndex,
+  }) async {
+    try {
+      debugPrint(
+        '[CV] Analysing captured JPEG: $path',
+      );
+
+      final inputImage =
+          InputImage.fromFilePath(
+        path,
+      );
+
+      final faces =
+          await _faceDetector.processImage(
+        inputImage,
+      );
+
+      debugPrint(
+        '[CV] Faces detected in step '
+        '${stepIndex + 1}: ${faces.length}',
+      );
+
       if (faces.isEmpty) {
-        setState(() {
-          _faceCount = 0;
+        debugPrint(
+          '[CV] No face detected in step '
+          '${stepIndex + 1}',
+        );
 
-          _leftEyeOpen = null;
-          _rightEyeOpen = null;
-
-          _smileProbability = null;
-
-          _headYaw = null;
-          _headPitch = null;
-          _headRoll = null;
-
-          _faceWidth = null;
-          _faceHeight = null;
-          _faceArea = null;
-
-          _faceConfidence = null;
-        });
-
-        return;
+        return null;
       }
 
-      // Choose the largest face.
+      // ---------------------------------------------------------------
+      // Select largest face.
+      // ---------------------------------------------------------------
+
       final face =
           faces.reduce(
         (a, b) {
@@ -311,305 +522,522 @@ class _CVCameraScreenState
               b.boundingBox.width *
                   b.boundingBox.height;
 
-          return areaA > areaB ? a : b;
+          return areaA > areaB
+              ? a
+              : b;
         },
       );
 
-      _updateFaceMetrics(
-        face,
-        image,
-      );
-    } catch (e) {
-      debugPrint(
-        '[CV] Frame processing error: $e',
-      );
-    } finally {
-      _isProcessingFrame = false;
-    }
-  }
+      final box =
+          face.boundingBox;
 
-  // ===========================================================================
-  // CONVERT CAMERA IMAGE TO ML KIT INPUT
-  // ===========================================================================
+      final leftEye =
+          face.leftEyeOpenProbability;
 
-InputImage? _convertCameraImage(
-  CameraImage image,
-  CameraDescription camera,
-) {
-  try {
-    // ---------------------------------------------------------------
-    // Combine all camera planes into one byte array.
-    // ---------------------------------------------------------------
+      final rightEye =
+          face.rightEyeOpenProbability;
 
-    final BytesBuilder bytesBuilder =
-        BytesBuilder(copy: false);
+      final smile =
+          face.smilingProbability;
 
-    for (final Plane plane in image.planes) {
-      bytesBuilder.add(plane.bytes);
-    }
+      final yaw =
+          face.headEulerAngleY;
 
-    final Uint8List bytes =
-        bytesBuilder.takeBytes();
+      final pitch =
+          face.headEulerAngleX;
 
-    // ---------------------------------------------------------------
-    // Image size
-    // ---------------------------------------------------------------
+      final roll =
+          face.headEulerAngleZ;
 
-    final Size imageSize = Size(
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
+      final eyeValues =
+          <double>[];
 
-    // ---------------------------------------------------------------
-    // Camera rotation
-    // ---------------------------------------------------------------
+      if (leftEye != null) {
+        eyeValues.add(leftEye);
+      }
 
-    final InputImageRotation? imageRotation =
-        InputImageRotationValue.fromRawValue(
-      camera.sensorOrientation,
-    );
+      if (rightEye != null) {
+        eyeValues.add(rightEye);
+      }
 
-    if (imageRotation == null) {
-      debugPrint(
-        '[CV] Unsupported camera rotation: '
-        '${camera.sensorOrientation}',
-      );
-
-      return null;
-    }
-
-    // ---------------------------------------------------------------
-    // Image format
-    // ---------------------------------------------------------------
-
-    final InputImageFormat? inputImageFormat =
-        InputImageFormatValue.fromRawValue(
-      image.format.raw,
-    );
-
-    if (inputImageFormat == null) {
-      debugPrint(
-        '[CV] Unsupported image format: '
-        '${image.format.raw}',
-      );
-
-      return null;
-    }
-
-    // ---------------------------------------------------------------
-    // Metadata
-    // ---------------------------------------------------------------
-
-    final InputImageMetadata metadata =
-        InputImageMetadata(
-      size: imageSize,
-
-      rotation: imageRotation,
-
-      format: inputImageFormat,
-
-      bytesPerRow:
-          image.planes.first.bytesPerRow,
-    );
-
-    // ---------------------------------------------------------------
-    // ML Kit input
-    // ---------------------------------------------------------------
-
-    return InputImage.fromBytes(
-      bytes: bytes,
-      metadata: metadata,
-    );
-  } catch (e, stackTrace) {
-    debugPrint(
-      '[CV] Camera image conversion error: $e',
-    );
-
-    debugPrint(
-      '[CV] Stack trace: $stackTrace',
-    );
-
-    return null;
-  }
-}
-  // ===========================================================================
-  // UPDATE FACE METRICS
-  // ===========================================================================
-
-  void _updateFaceMetrics(
-    Face face,
-    CameraImage image,
-  ) {
-    final box =
-        face.boundingBox;
-
-    final width =
-        box.width;
-
-    final height =
-        box.height;
-
-    final area =
-        width * height;
-
-    final imageArea =
-        image.width *
-            image.height;
-
-    final normalizedArea =
-        imageArea > 0
-            ? area / imageArea
-            : 0.0;
-
-    final leftEye =
-        face.leftEyeOpenProbability;
-
-    final rightEye =
-        face.rightEyeOpenProbability;
-
-    final smile =
-        face.smilingProbability;
-
-    final yaw =
-        face.headEulerAngleY;
-
-    final pitch =
-        face.headEulerAngleX;
-
-    final roll =
-        face.headEulerAngleZ;
-
-    // -------------------------------------------------------------------------
-    // EYE / BLINK
-    // -------------------------------------------------------------------------
-
-    if (leftEye != null &&
-        rightEye != null) {
       final eyeOpen =
-          (leftEye + rightEye) / 2;
+          eyeValues.isEmpty
+              ? 0.0
+              : eyeValues.reduce(
+                    (a, b) => a + b,
+                  ) /
+                  eyeValues.length;
 
-      final eyesClosed =
+      final fatigue =
+          _calculateVisualFatigue(
+        leftEye: leftEye,
+        rightEye: rightEye,
+        pitch: pitch,
+      );
+
+      final alertness =
+          (1.0 - fatigue)
+              .clamp(0.0, 1.0);
+
+      final prolongedClosure =
           eyeOpen < 0.25;
 
-      if (eyesClosed &&
-          !_previousEyesClosed) {
-        _eyesClosedSince =
-            DateTime.now();
-      }
+      final imageSize =
+          inputImage.metadata?.size;
 
-      if (!eyesClosed &&
-          _previousEyesClosed) {
-        if (_eyesClosedSince != null) {
-          final duration =
-              DateTime.now()
-                  .difference(
-            _eyesClosedSince!,
-          );
+      final faceAreaRatio =
+          _calculateFaceAreaRatio(
+        box,
+        imageSize,
+      );
 
-          if (duration.inMilliseconds >=
-              100) {
-            _blinkCount++;
-          }
-        }
+      // ---------------------------------------------------------------
+      // We don't use a fake ML confidence value.
+      //
+      // The value represents whether ML Kit successfully detected
+      // a face and how large that face is in the captured image.
+      // ---------------------------------------------------------------
 
-        _eyesClosedSince = null;
-      }
+      final confidence =
+          _calculateDetectionConfidence(
+        faceAreaRatio,
+      );
 
-      _previousEyesClosed =
-          eyesClosed;
+      return {
+        'stepIndex': stepIndex,
+
+        'step':
+            _scanSteps[stepIndex]
+                .title,
+
+        'faceCount':
+            faces.length,
+
+        'faceDetected':
+            true,
+
+        'faceWidth':
+            box.width,
+
+        'faceHeight':
+            box.height,
+
+        'faceAreaRatio':
+            faceAreaRatio,
+
+        'faceConfidence':
+            confidence,
+
+        'leftEyeOpen':
+            leftEye ?? 0.0,
+
+        'rightEyeOpen':
+            rightEye ?? 0.0,
+
+        'eyeOpen':
+            eyeOpen,
+
+        'smileProbability':
+            smile ?? 0.0,
+
+        'yaw':
+            yaw ?? 0.0,
+
+        'pitch':
+            pitch ?? 0.0,
+
+        'roll':
+            roll ?? 0.0,
+
+        'fatigue':
+            fatigue,
+
+        'alertness':
+            alertness,
+
+        'prolongedEyeClosure':
+            prolongedClosure,
+      };
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[CV] Captured image analysis error: $e',
+      );
+
+      debugPrint(
+        '[CV] Stack trace: $stackTrace',
+      );
+
+      return null;
     }
+  }
 
-    // -------------------------------------------------------------------------
-    // FATIGUE HEURISTIC
-    // -------------------------------------------------------------------------
+  // ===========================================================================
+  // BUILD AGGREGATED PAYLOAD
+  // ===========================================================================
+
+  Map<String, dynamic>
+      _buildAggregatedPayload() {
+    final captures =
+        _captureResults;
 
     final fatigue =
-        _calculateVisualFatigue(
-      leftEye:
-          leftEye,
-      rightEye:
-          rightEye,
-      pitch:
-          pitch,
+        _averageByKey(
+      captures,
+      'fatigue',
     );
 
     final alertness =
-        1.0 - fatigue;
-
-    _fatigueSamples.add(
-      fatigue,
+        _averageByKey(
+      captures,
+      'alertness',
     );
 
-    _alertnessSamples.add(
-      alertness,
+    final leftEye =
+        _averageByKey(
+      captures,
+      'leftEyeOpen',
     );
 
-    // Keep only the recent window.
-    if (_fatigueSamples.length >
-        100) {
-      _fatigueSamples.removeAt(0);
-    }
-
-    if (_alertnessSamples.length >
-        100) {
-      _alertnessSamples.removeAt(0);
-    }
-
-    // -------------------------------------------------------------------------
-    // SKIN APPEARANCE
-    // -------------------------------------------------------------------------
-
-    final brightness =
-        _estimateFaceBrightness(
-      image,
-      box,
+    final rightEye =
+        _averageByKey(
+      captures,
+      'rightEyeOpen',
     );
 
-    if (!mounted) return;
+    final eyeOpen =
+        _averageByKey(
+      captures,
+      'eyeOpen',
+    );
 
-    setState(() {
-      _faceCount = 1;
+    final smile =
+        _averageByKey(
+      captures,
+      'smileProbability',
+    );
 
-      _leftEyeOpen =
-          leftEye;
+    final yaw =
+        _averageByKey(
+      captures,
+      'yaw',
+    );
 
-      _rightEyeOpen =
-          rightEye;
+    final pitch =
+        _averageByKey(
+      captures,
+      'pitch',
+    );
 
-      _smileProbability =
-          smile;
+    final roll =
+        _averageByKey(
+      captures,
+      'roll',
+    );
 
-      _headYaw =
-          yaw;
+    final faceWidth =
+        _averageByKey(
+      captures,
+      'faceWidth',
+    );
 
-      _headPitch =
-          pitch;
+    final faceHeight =
+        _averageByKey(
+      captures,
+      'faceHeight',
+    );
 
-      _headRoll =
-          roll;
+    final faceAreaRatio =
+        _averageByKey(
+      captures,
+      'faceAreaRatio',
+    );
 
-      _faceWidth =
-          width;
+    final confidence =
+        _averageByKey(
+      captures,
+      'faceConfidence',
+    );
 
-      _faceHeight =
-          height;
+    final prolongedClosureCount =
+        captures.where(
+      (item) =>
+          item['prolongedEyeClosure'] ==
+          true,
+    ).length;
 
-      _faceArea =
-          normalizedArea;
+    final blinkLikeCaptures =
+        captures.where(
+      (item) {
+        final value =
+            _number(
+          item['eyeOpen'],
+        );
 
-      // ML Kit's Face object does not provide
-      // a universally calibrated confidence value
-      // for every configuration.
-      _faceConfidence =
-          1.0;
+        return value > 0 &&
+            value < 0.25;
+      },
+    ).length;
 
-      _skinBrightness =
-          brightness;
-    });
+    return {
+      // -----------------------------------------------------------------
+      // Metadata
+      // -----------------------------------------------------------------
+
+      'capturedAt':
+          DateTime.now()
+              .toUtc()
+              .toIso8601String(),
+
+      'source':
+          'camera',
+
+      'modelName':
+          'google-mlkit-face-detection',
+
+      'modelVersion':
+          '1.0.0',
+
+      // -----------------------------------------------------------------
+      // Image quality
+      // -----------------------------------------------------------------
+
+      'imageQuality': {
+        'faceDetected':
+            captures.isNotEmpty,
+
+        'faceCount':
+            captures.isNotEmpty
+                ? captures
+                    .map(
+                      (e) =>
+                          _number(
+                        e['faceCount'],
+                      ),
+                    )
+                    .reduce(
+                      math.max,
+                    )
+                    .toInt()
+                : 0,
+
+        'faceConfidence':
+            confidence,
+
+        'faceSizeRatio':
+            faceAreaRatio,
+
+        'lightingScore':
+            0.0,
+
+        'blurScore':
+            0.0,
+      },
+
+      // -----------------------------------------------------------------
+      // Geometry
+      // -----------------------------------------------------------------
+
+      'geometry': {
+        'faceWidth':
+            faceWidth,
+
+        'faceHeight':
+            faceHeight,
+
+        'faceAreaRatio':
+            faceAreaRatio,
+
+        'faceAspectRatio':
+            faceHeight > 0
+                ? faceWidth /
+                    faceHeight
+                : 0.0,
+
+        'eyeAspectRatioLeft':
+            leftEye,
+
+        'eyeAspectRatioRight':
+            rightEye,
+
+        'mouthOpeningRatio':
+            0.0,
+
+        'browEyeDistanceLeft':
+            0.0,
+
+        'browEyeDistanceRight':
+            0.0,
+      },
+
+      // -----------------------------------------------------------------
+      // Eye signals
+      // -----------------------------------------------------------------
+
+      'eyeSignals': {
+        'leftEyeOpenness':
+            leftEye,
+
+        'rightEyeOpenness':
+            rightEye,
+
+        'averageEyeOpen':
+            eyeOpen,
+
+        'blinkDetected':
+            blinkLikeCaptures > 0,
+
+        'blinkCount':
+            _blinkCount,
+
+        'prolongedEyeClosure':
+            prolongedClosureCount > 0,
+
+        'eyeClosureDurationMs':
+            0,
+
+        'capturedEyeClosureSamples':
+            prolongedClosureCount,
+      },
+
+      // -----------------------------------------------------------------
+      // Head pose
+      // -----------------------------------------------------------------
+
+      'headPose': {
+        'yaw':
+            yaw,
+
+        'pitch':
+            pitch,
+
+        'roll':
+            roll,
+      },
+
+      // -----------------------------------------------------------------
+      // Blendshapes
+      //
+      // ML Kit does not provide MediaPipe blendshape
+      // coefficients through this API.
+      // -----------------------------------------------------------------
+
+      'blendshapes': {
+        'eyeBlinkLeft':
+            0.0,
+
+        'eyeBlinkRight':
+            0.0,
+
+        'eyeSquintLeft':
+            0.0,
+
+        'eyeSquintRight':
+            0.0,
+
+        'eyeWideLeft':
+            0.0,
+
+        'eyeWideRight':
+            0.0,
+
+        'jawOpen':
+            0.0,
+
+        'mouthSmileLeft':
+            smile,
+
+        'mouthSmileRight':
+            smile,
+
+        'browDownLeft':
+            0.0,
+
+        'browDownRight':
+            0.0,
+
+        'browInnerUp':
+            0.0,
+      },
+
+      // -----------------------------------------------------------------
+      // Skin appearance
+      //
+      // We intentionally do not claim actual clinical skin metrics.
+      // -----------------------------------------------------------------
+
+      'skinAppearance': {
+        'brightnessMean':
+            0.0,
+
+        'specularHighlightRatio':
+            0.0,
+
+        'textureVariance':
+            0.0,
+
+        'visibleSkinSheenScore':
+            0.0,
+
+        'confidence':
+            0.0,
+      },
+
+      // -----------------------------------------------------------------
+      // Derived visual signals
+      // -----------------------------------------------------------------
+
+      'derivedSignals': {
+        'visualFatigueScore':
+            fatigue,
+
+        'visualFatigueConfidence':
+            _fatigueConfidence(
+          captures.length,
+        ),
+
+        'eyeClosureScore':
+            (1.0 - eyeOpen)
+                .clamp(0.0, 1.0),
+
+        'alertnessScore':
+            alertness,
+
+        'visibleSkinSheenScore':
+            0.0,
+      },
+
+      // -----------------------------------------------------------------
+      // Privacy
+      // -----------------------------------------------------------------
+
+      'privacy': {
+        'rawImageStored':
+            false,
+
+        'consentGiven':
+            true,
+      },
+
+      // -----------------------------------------------------------------
+      // Individual capture information
+      //
+      // Useful for future detail screens/trends.
+      // -----------------------------------------------------------------
+
+      'captureSamples':
+          captures,
+
+      // -----------------------------------------------------------------
+      // Disclaimer
+      // -----------------------------------------------------------------
+
+      'disclaimer':
+          'Computer-vision signals are non-clinical indicators and are not a medical diagnosis.',
+    };
   }
 
   // ===========================================================================
-  // VISUAL FATIGUE HEURISTIC
+  // FATIGUE
   // ===========================================================================
 
   double _calculateVisualFatigue({
@@ -624,32 +1052,31 @@ InputImage? _convertCameraImage(
     if (leftEye != null &&
         rightEye != null) {
       final eyeOpen =
-          (leftEye + rightEye) / 2;
+          (leftEye + rightEye) /
+              2;
 
-      // Lower eye openness → higher visual
-      // fatigue indicator.
       final eyeScore =
           (1.0 - eyeOpen)
               .clamp(0.0, 1.0);
 
       score += eyeScore;
+
       signals++;
     }
 
     if (pitch != null) {
-      // Large downward head pitch can be
-      // an alertness-related visual signal,
-      // but is not itself evidence of fatigue.
       final pitchScore =
-          ((pitch.abs() - 10) / 35)
+          ((pitch.abs() - 10) /
+                  35)
               .clamp(0.0, 1.0);
 
       score += pitchScore;
+
       signals++;
     }
 
     if (signals == 0) {
-      return 0;
+      return 0.0;
     }
 
     return (score / signals)
@@ -657,189 +1084,121 @@ InputImage? _convertCameraImage(
   }
 
   // ===========================================================================
-  // FACE BRIGHTNESS
+  // FACE AREA
   // ===========================================================================
 
-  double? _estimateFaceBrightness(
-    CameraImage image,
-    Rect faceBox,
+  double _calculateFaceAreaRatio(
+    Rect face,
+    Size? imageSize,
   ) {
-    try {
-      if (image.planes.isEmpty) {
-        return null;
-      }
-
-      // Y plane contains luminance.
-      final plane =
-          image.planes.first;
-
-      final bytes =
-          plane.bytes;
-
-      if (bytes.isEmpty) {
-        return null;
-      }
-
-      final centerX =
-          faceBox.center.dx
-              .clamp(
-                0,
-                image.width - 1,
-              )
-              .toInt();
-
-      final centerY =
-          faceBox.center.dy
-              .clamp(
-                0,
-                image.height - 1,
-              )
-              .toInt();
-
-      final index =
-          centerY *
-                  plane.bytesPerRow +
-              centerX;
-
-      if (index < 0 ||
-          index >= bytes.length) {
-        return null;
-      }
-
-      return bytes[index]
-          .toDouble();
-    } catch (_) {
-      return null;
+    if (imageSize == null ||
+        imageSize.width <= 0 ||
+        imageSize.height <= 0) {
+      return 0.0;
     }
+
+    final imageArea =
+        imageSize.width *
+            imageSize.height;
+
+    if (imageArea <= 0) {
+      return 0.0;
+    }
+
+    return (
+      face.width *
+          face.height
+    ) /
+        imageArea;
   }
 
   // ===========================================================================
-  // RESULT
+  // DETECTION CONFIDENCE
   // ===========================================================================
 
-  Map<String, dynamic> getCurrentResult() {
-    final fatigue = _average(_fatigueSamples).clamp(0.0, 1.0);
-    final alertness = _average(_alertnessSamples).clamp(0.0, 1.0);
+  double _calculateDetectionConfidence(
+    double faceAreaRatio,
+  ) {
+    if (faceAreaRatio <= 0) {
+      return 0.0;
+    }
 
-    final eyeOpen = (_leftEyeOpen != null && _rightEyeOpen != null)
-        ? ((_leftEyeOpen! + _rightEyeOpen!) / 2).clamp(0.0, 1.0)
-        : 0.0;
-
-    final faceWidth = _faceWidth ?? 0.0;
-    final faceHeight = _faceHeight ?? 0.0;
-    final faceAspectRatio = faceHeight > 0 ? faceWidth / faceHeight : 0.0;
-
-    final prolongedClosure = _eyesClosedSince != null &&
-        DateTime.now().difference(_eyesClosedSince!).inMilliseconds >= 1000;
-
-    return {
-      'capturedAt': DateTime.now().toUtc().toIso8601String(),
-      'source': 'camera',
-      'modelName': 'google-mlkit-face-detection',
-      'modelVersion': '1.0.0',
-
-      'imageQuality': {
-        'faceDetected': _faceCount > 0,
-        'faceConfidence': _faceConfidence ?? 0.0,
-        'lightingScore': _lightingScore(_skinBrightness),
-        'blurScore': 0.0,
-        'faceSizeRatio': _faceArea ?? 0.0,
-      },
-
-      'geometry': {
-        'faceAspectRatio': faceAspectRatio,
-        'faceWidth': faceWidth,
-        'faceHeight': faceHeight,
-        'eyeAspectRatioLeft': _leftEyeOpen ?? 0.0,
-        'eyeAspectRatioRight': _rightEyeOpen ?? 0.0,
-        'mouthOpeningRatio': 0.0,
-        'browEyeDistanceLeft': 0.0,
-        'browEyeDistanceRight': 0.0,
-      },
-
-      'eyeSignals': {
-        'leftEyeOpenness': _leftEyeOpen ?? 0.0,
-        'rightEyeOpenness': _rightEyeOpen ?? 0.0,
-        'blinkDetected': _blinkCount > 0,
-        'blinkCount': _blinkCount,
-        'prolongedEyeClosure': prolongedClosure,
-        'eyeClosureDurationMs': _eyesClosedSince == null
-            ? 0
-            : DateTime.now().difference(_eyesClosedSince!).inMilliseconds,
-      },
-
-      'headPose': {
-        'yaw': _headYaw ?? 0.0,
-        'pitch': _headPitch ?? 0.0,
-        'roll': _headRoll ?? 0.0,
-      },
-
-      // ML Kit FaceDetector does not expose MediaPipe blendshape coefficients.
-      // Keep these fields zero rather than inventing model output.
-      'blendshapes': {
-        'eyeBlinkLeft': 0.0,
-        'eyeBlinkRight': 0.0,
-        'eyeSquintLeft': 0.0,
-        'eyeSquintRight': 0.0,
-        'eyeWideLeft': 0.0,
-        'eyeWideRight': 0.0,
-        'jawOpen': 0.0,
-        'mouthSmileLeft': _smileProbability ?? 0.0,
-        'mouthSmileRight': _smileProbability ?? 0.0,
-        'browDownLeft': 0.0,
-        'browDownRight': 0.0,
-        'browInnerUp': 0.0,
-      },
-
-      'skinAppearance': {
-        'brightnessMean': _skinBrightness ?? 0.0,
-        'specularHighlightRatio': 0.0,
-        'textureVariance': 0.0,
-        'visibleSkinSheenScore': 0.0,
-        'confidence': _faceConfidence ?? 0.0,
-      },
-
-      'derivedSignals': {
-        'visualFatigueScore': fatigue,
-        'visualFatigueConfidence': _fatigueConfidence(),
-        'eyeClosureScore': (1.0 - eyeOpen).clamp(0.0, 1.0),
-        'alertnessScore': alertness,
-        'visibleSkinSheenScore': 0.0,
-      },
-
-      'privacy': {
-        'rawImageStored': false,
-        'consentGiven': true,
-      },
-
-      'disclaimer':
-          'Computer-vision signals are non-clinical indicators and are not a medical diagnosis.',
-    };
+    // This is a usability/geometry score,
+    // NOT a calibrated ML Kit confidence value.
+    return (faceAreaRatio * 5.0)
+        .clamp(0.0, 1.0);
   }
 
-  double _lightingScore(double? brightness) {
-    if (brightness == null) return 0.0;
-    final normalized = (brightness / 255.0).clamp(0.0, 1.0);
-    return (1.0 - (normalized - 0.5).abs() * 2).clamp(0.0, 1.0);
-  }
+  // ===========================================================================
+  // AVERAGE
+  // ===========================================================================
 
-  double _fatigueConfidence() {
-    if (_fatigueSamples.length < 5) return 0.30;
-    if (_fatigueSamples.length < 20) return 0.55;
-    return 0.75;
-  }
-
-  double _average(
-    List<double> values,
+  double _averageByKey(
+    List<Map<String, dynamic>>
+        values,
+    String key,
   ) {
     if (values.isEmpty) {
-      return 0;
+      return 0.0;
     }
 
-    return values.reduce(
+    final numbers =
+        values
+            .map(
+              (item) =>
+                  _number(
+                item[key],
+              ),
+            )
+            .toList();
+
+    if (numbers.isEmpty) {
+      return 0.0;
+    }
+
+    return numbers.reduce(
           (a, b) => a + b,
         ) /
-        values.length;
+        numbers.length;
+  }
+
+  // ===========================================================================
+  // NUMBER
+  // ===========================================================================
+
+  double _number(
+    dynamic value,
+  ) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+          value?.toString() ?? '',
+        ) ??
+        0.0;
+  }
+
+  // ===========================================================================
+  // FATIGUE CONFIDENCE
+  // ===========================================================================
+
+  double _fatigueConfidence(
+    int samples,
+  ) {
+    if (samples <= 0) {
+      return 0.0;
+    }
+
+    if (samples < 2) {
+      return 0.30;
+    }
+
+    if (samples < 4) {
+      return 0.55;
+    }
+
+    return 0.75;
   }
 
   // ===========================================================================
@@ -848,177 +1207,133 @@ InputImage? _convertCameraImage(
 
   Future<void> _stopCamera() async {
     try {
-      if (_cameraController
-              ?.value
-              .isStreamingImages ==
-          true) {
-        await _cameraController!
-            .stopImageStream();
-      }
-    } catch (_) {}
-
-    try {
       await _cameraController
           ?.dispose();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint(
+        '[CV] Camera dispose error: $e',
+      );
+    }
 
     _cameraController = null;
   }
 
   // ===========================================================================
-  // FINISH
+  // SWITCH CAMERA
   // ===========================================================================
 
-  Future<void> _captureAndAnalyse() async {
-    if (_capturing) return;
-
-    if (_cameraController == null ||
-        !_cameraController!.value.isInitialized) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera is not ready.')),
-      );
+  Future<void> _switchCamera() async {
+    if (_capturing) {
       return;
     }
 
-    if (_faceCount <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please position your face inside the guide.'),
-        ),
+    if (_cameras.length < 2) {
+      _showMessage(
+        'No second camera is available.',
       );
+
       return;
     }
 
-    setState(() => _capturing = true);
+    final current =
+        _cameraController
+            ?.description;
 
-    try {
-      final controller = _cameraController!;
-
-      // Stop the live stream first so the camera can take a real snapshot.
-      if (controller.value.isStreamingImages) {
-        await controller.stopImageStream();
-      }
-
-      // -----------------------------------------------------------------------
-      // REAL FACE CAPTURE
-      // -----------------------------------------------------------------------
-      // The JPEG is captured on the device and immediately read by ML Kit.
-      // The raw image is NOT uploaded or stored by this implementation.
-      final XFile snapshot = await controller.takePicture();
-
-      // Re-run face detection on the exact captured frame. This means the
-      // values saved to the backend belong to the captured face, not merely
-      // to an earlier preview frame.
-      await _analyseCapturedSnapshot(snapshot.path);
-
-      final payload = getCurrentResult();
-      payload['capture'] = {
-        'captured': true,
-        'captureMethod': 'camera_snapshot',
-        'capturedAt': DateTime.now().toUtc().toIso8601String(),
-        'rawImageStored': false,
-      };
-
-      payload['privacy'] = {
-        'rawImageStored': false,
-        'consentGiven': true,
-      };
-
-      // Save the extracted CV data to MongoDB through the authenticated API.
-      final response = await _cvService.saveCapture(features: payload);
-      final analysis = response['analysis'];
-
-      await _stopCamera();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Face captured, analysed and saved successfully.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      Navigator.pop(
-        context,
-        analysis is Map
-            ? Map<String, dynamic>.from(analysis)
-            : payload,
-      );
-    } catch (e) {
-      debugPrint('[CV] Capture/upload error: $e');
-
-      if (!mounted) return;
-
-      setState(() => _capturing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Face capture failed: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+    if (current == null) {
+      return;
     }
-  }
 
-  Future<void> _analyseCapturedSnapshot(String path) async {
+    final next =
+        _cameras.firstWhere(
+      (camera) =>
+          camera.lensDirection !=
+          current.lensDirection,
+      orElse: () =>
+          _cameras.first,
+    );
+
     try {
-      final input = InputImage.fromFilePath(path);
-      final faces = await _faceDetector.processImage(input);
-
-      if (faces.isEmpty) {
-        throw Exception('No face was found in the captured image.');
-      }
-
-      final face = faces.reduce((a, b) {
-        final areaA = a.boundingBox.width * a.boundingBox.height;
-        final areaB = b.boundingBox.width * b.boundingBox.height;
-        return areaA > areaB ? a : b;
+      setState(() {
+        _cameraInitialized = false;
       });
 
-      final box = face.boundingBox;
-      final leftEye = face.leftEyeOpenProbability;
-      final rightEye = face.rightEyeOpenProbability;
-      final smile = face.smilingProbability;
-      final yaw = face.headEulerAngleY;
-      final pitch = face.headEulerAngleX;
-      final roll = face.headEulerAngleZ;
+      await _cameraController
+          ?.dispose();
 
-      final imageWidth = _cameraController?.value.previewSize?.height ?? 1;
-      final imageHeight = _cameraController?.value.previewSize?.width ?? 1;
-      final imageArea = imageWidth * imageHeight;
-      final normalizedArea = imageArea > 0
-          ? (box.width * box.height) / imageArea
-          : 0.0;
+      _cameraController = null;
+
+      await _createCameraController(
+        next,
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _faceCount = faces.length;
-        _leftEyeOpen = leftEye;
-        _rightEyeOpen = rightEye;
-        _smileProbability = smile;
-        _headYaw = yaw;
-        _headPitch = pitch;
-        _headRoll = roll;
-        _faceWidth = box.width;
-        _faceHeight = box.height;
-        _faceArea = normalizedArea.clamp(0.0, 1.0);
-        _faceConfidence = 1.0;
+        _faceCountReset();
       });
     } catch (e) {
-      debugPrint('[CV] Captured image analysis error: $e');
-      rethrow;
+      debugPrint(
+        '[CV] Camera switch error: $e',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _error =
+            'Unable to switch camera: $e';
+        _cameraInitialized = false;
+      });
     }
   }
 
+  void _faceCountReset() {
+    _currentStep = 0;
+    _scanStarted = false;
+    _scanCompleted = false;
+  }
+
   // ===========================================================================
-  // OPEN SETTINGS
+  // SETTINGS
   // ===========================================================================
 
   Future<void> _openSettings() async {
     await openAppSettings();
+  }
+
+  // ===========================================================================
+  // MESSAGE
+  // ===========================================================================
+
+  void _showMessage(
+    String message, {
+    bool error = false,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor:
+              error
+                  ? Colors.redAccent
+                  : Colors.green,
+          behavior:
+              SnackBarBehavior.floating,
+          margin:
+              const EdgeInsets.all(16),
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(
+              14,
+            ),
+          ),
+        ),
+      );
   }
 
   // ===========================================================================
@@ -1027,6 +1342,8 @@ InputImage? _convertCameraImage(
 
   @override
   void dispose() {
+    _guideAnimationController.dispose();
+
     _stopCamera();
 
     _faceDetector.close();
@@ -1049,23 +1366,30 @@ InputImage? _convertCameraImage(
       appBar: AppBar(
         backgroundColor:
             Colors.black,
-
         foregroundColor:
             Colors.white,
+        elevation: 0,
 
         title: const Text(
-          'CV Analysis',
+          'Computer Vision',
+          style: TextStyle(
+            fontWeight:
+                FontWeight.w700,
+          ),
         ),
 
         actions: [
           IconButton(
-            icon:
-                const Icon(
-              Icons.cameraswitch_rounded,
+            tooltip:
+                'Switch camera',
+            icon: const Icon(
+              Icons
+                  .cameraswitch_rounded,
             ),
-
             onPressed:
-                _switchCamera,
+                _capturing
+                    ? null
+                    : _switchCamera,
           ),
         ],
       ),
@@ -1083,224 +1407,505 @@ InputImage? _convertCameraImage(
 
   Widget _buildBody() {
     if (_initializing) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
-
-          children: [
-            CircularProgressIndicator(
-              color:
-                  Colors.white,
-            ),
-
-            SizedBox(
-              height: 16,
-            ),
-
-            Text(
-              'Starting camera...',
-              style:
-                  TextStyle(
-                color:
-                    Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildLoading();
     }
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding:
-              const EdgeInsets.all(
-            24,
-          ),
-
-          child: Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-
-            children: [
-              const Icon(
-                Icons
-                    .no_photography_rounded,
-
-                color:
-                    Colors.white,
-
-                size: 64,
-              ),
-
-              const SizedBox(
-                height: 20,
-              ),
-
-              Text(
-                _error!,
-
-                textAlign:
-                    TextAlign.center,
-
-                style:
-                    const TextStyle(
-                  color:
-                      Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-
-              const SizedBox(
-                height: 24,
-              ),
-
-              ElevatedButton.icon(
-                onPressed:
-                    _openSettings,
-
-                icon:
-                    const Icon(
-                  Icons.settings,
-                ),
-
-                label:
-                    const Text(
-                  'Open Settings',
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildError();
     }
 
     if (_cameraController == null ||
+        !_cameraInitialized ||
         !_cameraController!
             .value
             .isInitialized) {
       return const Center(
         child: Text(
           'Camera unavailable',
-          style:
-              TextStyle(
-            color:
-                Colors.white,
+          style: TextStyle(
+            color: Colors.white,
           ),
         ),
       );
     }
 
-    return Stack(
-      fit:
-          StackFit.expand,
+    return _buildCamera();
+  }
 
-      children: [
-        Center(
-          child:
-              CameraPreview(
-            _cameraController!,
+  // ===========================================================================
+  // LOADING
+  // ===========================================================================
+
+  Widget _buildLoading() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment:
+            MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            color: Colors.white,
           ),
-        ),
-
-        // Face guide.
-        Center(
-          child: Container(
-            width: 270,
-            height: 350,
-
-            decoration:
-                BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(
-                140,
-              ),
-
-              border:
-                  Border.all(
-                color:
-                    _faceCount > 0
-                        ? Colors.greenAccent
-                        : Colors.white70,
-
-                width: 3,
-              ),
+          SizedBox(height: 18),
+          Text(
+            'Starting camera...',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
             ),
           ),
-        ),
-
-        // Live status.
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 24,
-
-          child:
-              _buildLiveMetrics(),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   // ===========================================================================
-  // LIVE METRICS
+  // ERROR
   // ===========================================================================
 
-  Widget _buildLiveMetrics() {
-    final eyeOpen =
-        (_leftEyeOpen != null &&
-                _rightEyeOpen != null)
-            ? ((_leftEyeOpen! +
-                    _rightEyeOpen!) /
-                2)
-            : null;
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 82,
+              height: 82,
+              decoration:
+                  BoxDecoration(
+                color:
+                    Colors.white10,
+                shape:
+                    BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons
+                    .no_photography_rounded,
+                color: Colors.white,
+                size: 42,
+              ),
+            ),
 
-    final fatigue =
-        _average(
-      _fatigueSamples,
-    );
+            const SizedBox(
+              height: 24,
+            ),
 
-    return Container(
-      padding:
-          const EdgeInsets.all(
-        16,
+            Text(
+              _error!,
+              textAlign:
+                  TextAlign.center,
+              style:
+                  const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.5,
+              ),
+            ),
+
+            const SizedBox(
+              height: 26,
+            ),
+
+            ElevatedButton.icon(
+              onPressed:
+                  _openSettings,
+              icon: const Icon(
+                Icons.settings_rounded,
+              ),
+              label: const Text(
+                'Open Settings',
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
 
+  // ===========================================================================
+  // CAMERA
+  // ===========================================================================
+
+  Widget _buildCamera() {
+    return LayoutBuilder(
+      builder:
+          (
+            context,
+            constraints,
+          ) {
+        return Stack(
+          fit:
+              StackFit.expand,
+          children: [
+            // ---------------------------------------------------------------
+            // Camera preview
+            // ---------------------------------------------------------------
+
+            _buildCameraPreview(),
+
+            // ---------------------------------------------------------------
+            // Top instruction
+            // ---------------------------------------------------------------
+
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child:
+                  _buildInstructionCard(),
+            ),
+
+            // ---------------------------------------------------------------
+            // Face guide
+            // ---------------------------------------------------------------
+
+            Center(
+              child:
+                  _buildAnimatedFaceGuide(),
+            ),
+
+            // ---------------------------------------------------------------
+            // Direction indicator
+            // ---------------------------------------------------------------
+
+            if (_scanStarted &&
+                !_scanCompleted)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 118,
+                child:
+                    _buildDirectionHint(),
+              ),
+
+            // ---------------------------------------------------------------
+            // Bottom information
+            // ---------------------------------------------------------------
+
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 18,
+              child:
+                  _buildCameraStatus(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // CAMERA PREVIEW
+  // ===========================================================================
+
+  Widget _buildCameraPreview() {
+    final controller =
+        _cameraController!;
+
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width:
+                controller
+                    .value
+                    .previewSize
+                    ?.height ??
+                1,
+            height:
+                controller
+                    .value
+                    .previewSize
+                    ?.width ??
+                1,
+            child:
+                CameraPreview(
+              controller,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // INSTRUCTION CARD
+  // ===========================================================================
+
+  Widget _buildInstructionCard() {
+    final step =
+        _scanStarted
+            ? _currentStep + 1
+            : 0;
+
+    return AnimatedContainer(
+      duration:
+          const Duration(
+        milliseconds: 250,
+      ),
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ),
       decoration:
           BoxDecoration(
         color:
             Colors.black.withOpacity(
-          0.75,
+          0.68,
         ),
-
         borderRadius:
             BorderRadius.circular(
-          20,
+          18,
+        ),
+        border:
+            Border.all(
+          color:
+              Colors.white.withOpacity(
+            0.10,
+          ),
         ),
       ),
-
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
+          Container(
+            width: 42,
+            height: 42,
+            decoration:
+                BoxDecoration(
+              color:
+                  const Color(
+                0xff6c5ce7,
+              ).withOpacity(
+                0.9,
+              ),
+              shape:
+                  BoxShape.circle,
+            ),
+            child: Icon(
+              _scanStarted
+                  ? _scanSteps[
+                          _currentStep]
+                      .icon
+                  : Icons.face_rounded,
+              color:
+                  Colors.white,
+              size: 22,
+            ),
+          ),
 
-                decoration:
-                    BoxDecoration(
-                  color:
-                      _faceCount > 0
-                          ? Colors.greenAccent
-                          : Colors.redAccent,
+          const SizedBox(
+            width: 12,
+          ),
 
-                  shape:
-                      BoxShape.circle,
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  _scanStarted
+                      ? _instruction
+                      : 'Ready for your face scan',
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white,
+                    fontSize: 16,
+                    fontWeight:
+                        FontWeight.w700,
+                  ),
                 ),
+
+                const SizedBox(
+                  height: 3,
+                ),
+
+                Text(
+                  _scanStarted
+                      ? _subInstruction
+                      : 'Keep your face inside the guide',
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (_scanStarted &&
+              !_scanCompleted)
+            Container(
+              padding:
+                  const EdgeInsets
+                      .symmetric(
+                horizontal: 9,
+                vertical: 5,
+              ),
+              decoration:
+                  BoxDecoration(
+                color:
+                    Colors.white12,
+                borderRadius:
+                    BorderRadius.circular(
+                  10,
+                ),
+              ),
+              child: Text(
+                '$step/${_scanSteps.length}',
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.white,
+                  fontSize: 12,
+                  fontWeight:
+                      FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // FACE GUIDE
+  // ===========================================================================
+
+  Widget _buildAnimatedFaceGuide() {
+    final screenWidth =
+        MediaQuery.of(context)
+            .size
+            .width;
+
+    final double width =
+        math.min(
+      screenWidth * 0.70,
+      285.0,
+    ).toDouble();
+
+    final height =
+        width * 1.30;
+
+    final active =
+        _scanStarted &&
+            !_scanCompleted;
+
+    return AnimatedBuilder(
+      animation:
+          _guideAnimationController,
+      builder:
+          (
+            context,
+            child,
+          ) {
+        final pulse =
+            1.0 +
+                (_guideAnimationController
+                        .value *
+                    0.018);
+
+        return Transform.scale(
+          scale: active
+              ? pulse
+              : 1.0,
+          child:
+              Container(
+            width: width,
+            height: height,
+            decoration:
+                BoxDecoration(
+              borderRadius:
+                  BorderRadius.circular(
+                width / 2,
+              ),
+              border:
+                  Border.all(
+                color:
+                    active
+                        ? const Color(
+                            0xff8b7cff,
+                          )
+                        : Colors.white70,
+                width: 3,
+              ),
+              boxShadow:
+                  active
+                      ? [
+                          BoxShadow(
+                            color:
+                                const Color(
+                              0xff6c5ce7,
+                            ).withOpacity(
+                              0.35,
+                            ),
+                            blurRadius:
+                                30,
+                            spreadRadius:
+                                4,
+                          ),
+                        ]
+                      : null,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // DIRECTION HINT
+  // ===========================================================================
+
+  Widget _buildDirectionHint() {
+    final step =
+        _scanSteps[_currentStep];
+
+    return Center(
+      child: AnimatedSwitcher(
+        duration:
+            const Duration(
+          milliseconds: 300,
+        ),
+        child: Container(
+          key: ValueKey(
+            _currentStep,
+          ),
+          padding:
+              const EdgeInsets
+                  .symmetric(
+            horizontal: 18,
+            vertical: 10,
+          ),
+          decoration:
+              BoxDecoration(
+            color:
+                Colors.black.withOpacity(
+              0.65,
+            ),
+            borderRadius:
+                BorderRadius.circular(
+              30,
+            ),
+          ),
+          child: Row(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: [
+              Icon(
+                step.icon,
+                color:
+                    Colors.white,
+                size: 22,
               ),
 
               const SizedBox(
@@ -1308,98 +1913,84 @@ InputImage? _convertCameraImage(
               ),
 
               Text(
-                _faceCount > 0
-                    ? 'Face detected'
-                    : 'Position your face',
-
+                step.title,
                 style:
                     const TextStyle(
                   color:
                       Colors.white,
+                  fontSize: 13,
                   fontWeight:
-                      FontWeight.bold,
+                      FontWeight.w600,
                 ),
               ),
             ],
           ),
-
-          if (_faceCount > 0) ...[
-            const SizedBox(
-              height: 12,
-            ),
-
-            Row(
-              children: [
-                Expanded(
-                  child:
-                      _metric(
-                    'Eye openness',
-                    eyeOpen != null
-                        ? '${(eyeOpen * 100).toStringAsFixed(0)}%'
-                        : '--',
-                  ),
-                ),
-
-                Expanded(
-                  child:
-                      _metric(
-                    'Blink count',
-                    '$_blinkCount',
-                  ),
-                ),
-
-                Expanded(
-                  child:
-                      _metric(
-                    'Visual fatigue',
-                    '${(fatigue * 100).toStringAsFixed(0)}%',
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _metric(
-    String title,
-    String value,
-  ) {
-    return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+  // ===========================================================================
+  // CAMERA STATUS
+  // ===========================================================================
 
-      children: [
-        Text(
-          title,
-
-          style:
-              const TextStyle(
-            color:
-                Colors.white60,
-            fontSize: 10,
+  Widget _buildCameraStatus() {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.black.withOpacity(
+          0.68,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          16,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration:
+                BoxDecoration(
+              color:
+                  _scanCompleted
+                      ? Colors.greenAccent
+                      : _scanStarted
+                          ? Colors.orangeAccent
+                          : Colors.white,
+              shape:
+                  BoxShape.circle,
+            ),
           ),
-        ),
 
-        const SizedBox(
-          height: 3,
-        ),
-
-        Text(
-          value,
-
-          style:
-              const TextStyle(
-            color:
-                Colors.white,
-            fontSize: 16,
-            fontWeight:
-                FontWeight.bold,
+          const SizedBox(
+            width: 9,
           ),
-        ),
-      ],
+
+          Expanded(
+            child: Text(
+              _scanCompleted
+                  ? 'Scan complete'
+                  : _scanStarted
+                      ? 'Capturing your face from different angles...'
+                      : 'Good lighting helps improve detection',
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1408,50 +1999,122 @@ InputImage? _convertCameraImage(
   // ===========================================================================
 
   Widget _buildBottomBar() {
+    final canCapture =
+        _cameraInitialized &&
+            !_capturing;
+
     return SafeArea(
+      top: false,
       child: Container(
-        color: Colors.black,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        color:
+            Colors.black,
+        padding:
+            const EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          16,
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
-            if (_faceCount > 0)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
+            // ---------------------------------------------------------------
+            // Guidance
+            // ---------------------------------------------------------------
+
+            if (!_capturing)
+              Padding(
+                padding:
+                    const EdgeInsets.only(
+                  bottom: 10,
+                ),
                 child: Text(
-                  'Face detected • Ready to capture and save',
-                  style: TextStyle(
-                    color: Colors.greenAccent,
+                  'You will be guided through 5 quick positions',
+                  textAlign:
+                      TextAlign.center,
+                  style:
+                      const TextStyle(
+                    color:
+                        Colors.white60,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
+
+            // ---------------------------------------------------------------
+            // Progress
+            // ---------------------------------------------------------------
+
+            if (_capturing)
+              Padding(
+                padding:
+                    const EdgeInsets.only(
+                  bottom: 12,
+                ),
+                child:
+                    _buildProgressIndicator(),
+              ),
+
+            // ---------------------------------------------------------------
+            // Capture button
+            // ---------------------------------------------------------------
+
             SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _faceCount > 0 && !_capturing
-                    ? _captureAndAnalyse
-                    : null,
+              width:
+                  double.infinity,
+              child:
+                  ElevatedButton.icon(
+                onPressed:
+                    canCapture
+                        ? _startGuidedScan
+                        : null,
+
                 icon: _capturing
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+                        width: 21,
+                        height: 21,
+                        child:
+                            CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color:
+                              Colors.white,
                         ),
                       )
-                    : const Icon(Icons.camera_alt_rounded),
-                label: Text(_capturing ? 'Capturing & Analysing...' : 'Capture Face & Analyse'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff6c5ce7),
-                  disabledBackgroundColor: Colors.grey.shade800,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    : const Icon(
+                        Icons
+                            .camera_alt_rounded,
+                      ),
+
+                label: Text(
+                  _capturing
+                      ? 'Scanning...'
+                      : 'Capture & Analyse',
+                ),
+
+                style:
+                    ElevatedButton.styleFrom(
+                  backgroundColor:
+                      const Color(
+                    0xff6c5ce7,
                   ),
+                  disabledBackgroundColor:
+                      Colors.grey.shade800,
+                  foregroundColor:
+                      Colors.white,
+                  minimumSize:
+                      const Size(
+                    double.infinity,
+                    58,
+                  ),
+                  shape:
+                      RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(
+                      18,
+                    ),
+                  ),
+                  elevation: 0,
                 ),
               ),
             ),
@@ -1462,60 +2125,90 @@ InputImage? _convertCameraImage(
   }
 
   // ===========================================================================
-  // SWITCH CAMERA
+  // PROGRESS
   // ===========================================================================
 
-  Future<void> _switchCamera() async {
-    if (_cameras.length < 2) {
-      return;
-    }
+  Widget _buildProgressIndicator() {
+    final progress =
+        _scanStarted
+            ? (_currentStep + 1) /
+                _scanSteps.length
+            : 0.0;
 
-    final current =
-        _cameraController
-            ?.description;
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment:
+              MainAxisAlignment
+                  .spaceBetween,
+          children: [
+            Text(
+              'Guided face scan',
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white70,
+                fontSize: 12,
+              ),
+            ),
+            Text(
+              '${_currentStep + 1} / ${_scanSteps.length}',
+              style:
+                  const TextStyle(
+                color:
+                    Colors.white,
+                fontSize: 12,
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
 
-    if (current == null) {
-      return;
-    }
+        const SizedBox(
+          height: 8,
+        ),
 
-    final next =
-        _cameras.firstWhere(
-      (camera) =>
-          camera.lensDirection !=
-          current.lensDirection,
-      orElse: () =>
-          _cameras.first,
+        ClipRRect(
+          borderRadius:
+              BorderRadius.circular(
+            10,
+          ),
+          child:
+              LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            backgroundColor:
+                Colors.white12,
+            valueColor:
+                const AlwaysStoppedAnimation<
+                    Color>(
+              Color(0xff8b7cff),
+            ),
+          ),
+        ),
+      ],
     );
-
-    await _cameraController
-        ?.stopImageStream();
-
-    await _cameraController
-        ?.dispose();
-
-    _cameraController =
-        CameraController(
-      next,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup:
-          ImageFormatGroup.yuv420,
-    );
-
-    await _cameraController!
-        .initialize();
-
-    await _cameraController!
-        .startImageStream(
-      _processCameraImage,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _capturing = false;
-      _faceCount = 0;
-    });
-
   }
+}
+
+// ===========================================================================
+// SCAN STEP MODEL
+// ===========================================================================
+
+class _ScanStep {
+  final String title;
+
+  final String instruction;
+
+  final IconData icon;
+
+  final Duration duration;
+
+  const _ScanStep({
+    required this.title,
+    required this.instruction,
+    required this.icon,
+    required this.duration,
+  });
 }
