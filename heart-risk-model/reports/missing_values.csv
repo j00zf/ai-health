@@ -1,0 +1,17 @@
+,missing_count,missing_percentage
+glucose,388,9.150943396226415
+education,105,2.4764150943396226
+BPMeds,53,1.25
+totChol,50,1.179245283018868
+cigsPerDay,29,0.6839622641509434
+BMI,19,0.4481132075471698
+heartRate,1,0.02358490566037736
+male,0,0.0
+age,0,0.0
+currentSmoker,0,0.0
+prevalentStroke,0,0.0
+prevalentHyp,0,0.0
+diabetes,0,0.0
+sysBP,0,0.0
+diaBP,0,0.0
+TenYearCHD,0,0.0
