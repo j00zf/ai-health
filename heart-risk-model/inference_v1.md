@@ -1,4 +1,4 @@
-# Our first model was:
+# first model was:
 
 Logistic Regression
 +
@@ -49,4 +49,3 @@ risk =
 + β3(glucose)
 + ...
 
-XGBoost can learn much more complex decision boundaries.

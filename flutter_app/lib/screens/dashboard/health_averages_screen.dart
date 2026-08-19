@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/health_service.dart';
+import '../../core/services/auth_manager.dart';
 
 class HealthAveragesScreen extends StatefulWidget {
   final String? initialMetric;
@@ -62,13 +63,12 @@ class _HealthAveragesScreenState extends State<HealthAveragesScreen>
     });
 
     try {
-      final ok =
-          HealthService.isConnected ? true : await HealthService.connect();
-      if (!ok) {
-        throw Exception('Google Health is not connected.');
+      final token = await AuthManager().getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please login again to load saved health data.');
       }
 
-      final result = await HealthService.getAllHealthHistory(daysBack: 3650);
+      final result = await HealthService.loadStoredHealthHistory(token);
       final raw = result['records'];
       final rows = raw is List
           ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
@@ -79,7 +79,7 @@ class _HealthAveragesScreenState extends State<HealthAveragesScreen>
         _records = rows;
         _loading = false;
         if (rows.isEmpty) {
-          _error = 'No Google Health data is available.';
+          _error = 'No saved health data is available yet. Sync Google Health from the dashboard.';
         }
       });
     } catch (e) {

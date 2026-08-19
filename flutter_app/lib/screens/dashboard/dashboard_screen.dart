@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'record_health_screen.dart';
 import 'health_averages_screen.dart';
+import 'health_sync_screen.dart';
 import 'ai_chat_screen.dart';
 
 import '../../core/constants/api_constants.dart';
@@ -67,38 +68,38 @@ class _DashboardScreenState
   @override
   void initState() {
     super.initState();
-
     _initializeHealthAndDashboard();
 
-    // Keep the dashboard current while it is open.
-    //
-    // This is intentionally an in-app foreground refresh.
-    // True background sync requires Android WorkManager/background execution.
+    // Sync checks are now hourly, not every five minutes. The check first
+    // consults MongoDB sync points; Google Health is only queried when a
+    // daily/weekly/monthly point is due.
     _healthRefreshTimer = Timer.periodic(
-      const Duration(minutes: 5),
-      (_) => _refreshHealthSilently(),
+      const Duration(hours: 1),
+      (_) => _maybeAutomaticHealthSync(),
     );
   }
 
   Future<void> _initializeHealthAndDashboard() async {
     await HealthService.initialize();
-
     await loadDashboard();
+    await _maybeAutomaticHealthSync();
   }
 
-  Future<void> _refreshHealthSilently() async {
-    if (!mounted ||
-        isLoading ||
-        isHealthLoading) {
+  Future<void> _maybeAutomaticHealthSync() async {
+    if (!mounted || isLoading || isHealthLoading || !HealthService.isConnected) {
       return;
     }
 
-    final restored =
-        await HealthService.initialize();
+    try {
+      final token = await AuthManager().getToken();
+      if (token == null || token.isEmpty) return;
 
-    if (restored ||
-        HealthService.isConnected) {
-      await loadHealthOverview();
+      final due = await HealthService.isHealthSyncDue(token);
+      if (due) {
+        await _openHealthSyncScreen(force: false);
+      }
+    } catch (e) {
+      debugPrint('[Dashboard] Sync-point check failed: $e');
     }
   }
 
@@ -212,99 +213,62 @@ class _DashboardScreenState
     setState(() {
       isHealthLoading = true;
       healthErrorMessage = null;
-
-      healthRecordStatus =
-          'Fetching your latest health records...';
+      healthRecordStatus = 'Loading saved health data...';
     });
 
     try {
-      if (!HealthService.isConnected) {
-        if (!mounted) return;
-
-        setState(() {
-          healthRecords = [];
-
-          latestHealthRecord = null;
-
-          isHealthLoading = false;
-
-          healthRecordStatus =
-              'Connect Google Health to view your records';
-        });
-
-        return;
+      final token = await AuthManager().getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token found.');
       }
 
-      final history =
-          await HealthService.getAllHealthHistory(
-        daysBack: 3650,
-      );
-
-      final rawRecords =
-          history['records'];
-
+      final history = await HealthService.loadStoredHealthHistory(token);
+      final rawRecords = history['records'];
       final records = rawRecords is List
           ? rawRecords
               .whereType<Map>()
-              .map(
-                (record) =>
-                    Map<String, dynamic>.from(
-                  record,
-                ),
-              )
+              .map((record) => Map<String, dynamic>.from(record))
               .toList()
           : <Map<String, dynamic>>[];
 
       if (!mounted) return;
-
       setState(() {
         healthRecords = records;
-
-        latestHealthRecord =
-            records.isNotEmpty
-                ? records.first
-                : null;
-
+        latestHealthRecord = records.isNotEmpty ? records.first : null;
         isHealthLoading = false;
-
-        if (records.isEmpty) {
-          healthRecordStatus =
-              'No health records found';
-        } else {
-          healthRecordStatus =
-              'Latest available health record';
-        }
+        healthRecordStatus = records.isEmpty
+            ? 'No saved health records found'
+            : 'Latest saved health record';
       });
-
-      // Persist the complete available Google Health history.
-      // MongoDB upserts by user + date, so repeated refreshes are safe.
-      if (records.isNotEmpty) {
-        try {
-          final token = await AuthManager().getToken();
-          if (token != null && token.isNotEmpty) {
-            await HealthService.syncHistoryToBackend(token, records);
-          }
-        } catch (e) {
-          debugPrint('[Dashboard] Full health history sync error: $e');
-        }
-      }
     } catch (e) {
-      debugPrint(
-        'Health overview error: $e',
-      );
-
+      debugPrint('Stored health overview error: $e');
       if (!mounted) return;
-
       setState(() {
         isHealthLoading = false;
-
-        healthErrorMessage =
-            "Unable to load Google Health data";
-
-        healthRecordStatus =
-            'Unable to load Google Health data';
+        healthErrorMessage = 'Unable to load saved health data';
+        healthRecordStatus = 'Unable to load saved health data';
       });
     }
+  }
+
+  Future<void> _openHealthSyncScreen({required bool force}) async {
+    if (!mounted || isSyncing) return;
+    final token = await AuthManager().getToken();
+    if (token == null || token.isEmpty) return;
+
+    setState(() => isSyncing = true);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => HealthSyncScreen(
+          force: force,
+          onSync: () => HealthService.smartSyncHealth(token, force: force),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => isSyncing = false);
+    await loadHealthOverview();
   }
 
   // ===========================================================================
@@ -351,13 +315,11 @@ class _DashboardScreenState
         return;
       }
 
-      await loadHealthOverview();
-
       if (!mounted) return;
-
       setState(() {
         isConnectingHealth = false;
       });
+      await _openHealthSyncScreen(force: true);
 
       ScaffoldMessenger.of(context)
           .showSnackBar(
@@ -432,91 +394,16 @@ class _DashboardScreenState
   // ===========================================================================
 
   Future<void> syncHealthToBackend() async {
-    if (latestHealthRecord == null &&
-        healthRecords.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+    if (!HealthService.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'No health data available to sync.',
-          ),
-          backgroundColor:
-              Colors.orange,
+          content: Text('Connect Google Health first.'),
+          backgroundColor: Colors.orange,
         ),
       );
-
       return;
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      isSyncing = true;
-    });
-
-    try {
-      final token =
-          await AuthManager().getToken();
-
-      if (token == null) {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No auth token found. Please login first.',
-            ),
-            backgroundColor:
-                Colors.orange,
-          ),
-        );
-
-        return;
-      }
-
-      final success =
-          await HealthService.syncToBackend(
-        token,
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? 'Health data synced successfully!'
-                : 'Sync failed',
-          ),
-          backgroundColor: success
-              ? Colors.teal
-              : Colors.redAccent,
-          duration:
-              const Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            'Sync error: $e',
-          ),
-          backgroundColor:
-              Colors.redAccent,
-        ),
-      );
-    } finally {
-      if (!mounted) return;
-
-      setState(() {
-        isSyncing = false;
-      });
-    }
+    await _openHealthSyncScreen(force: true);
   }
 
   // ===========================================================================
@@ -1030,9 +917,8 @@ class _DashboardScreenState
 
   Future<void> _refreshAll() async {
     await loadDashboard();
-
     if (HealthService.isConnected) {
-      await loadHealthOverview();
+      await _openHealthSyncScreen(force: true);
     }
   }
 

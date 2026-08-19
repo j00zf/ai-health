@@ -11,10 +11,16 @@ const {
   getHealthAverages,
   getHealthRecordByDate,
   deleteHealthRecord,
+  getHealthSnapshot,
+  updateHealthSyncPoints,
+  syncHealthIncremental,
 } = require("../controllers/healthConnectController");
 
 router.post("/sync", protect, syncHealth);
 router.post("/sync-bulk", protect, syncHealthBulk);
+router.get("/snapshot", protect, getHealthSnapshot);
+router.post("/sync-points", protect, updateHealthSyncPoints);
+router.post("/sync-incremental", protect, syncHealthIncremental);
 
 router.get("/latest", protect, getLatestHealth);
 router.get("/history", protect, getHealthHistory);

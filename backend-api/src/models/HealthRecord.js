@@ -38,6 +38,7 @@ const healthRecordSchema = new mongoose.Schema(
 
     // Meta
     source: { type: String, default: "Unknown" },
+    recordHash: { type: String, default: "", index: true },
     syncedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }

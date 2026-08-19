@@ -1,5 +1,7 @@
+const crypto = require("crypto");
 const HealthRecord = require("../models/HealthRecord");
 const UserProfile = require("../models/UserProfile");
+const HealthSyncPoint = require("../models/HealthSyncPoint");
 
 const NUMERIC_FIELDS = [
   "steps",
@@ -26,8 +28,26 @@ const normalizeRecord = (record) => {
   out.date = String(record?.date || "").slice(0, 10);
   out.source = record?.source || "Google Health Cloud API";
   out.syncedAt = record?.syncedAt ? new Date(record.syncedAt) : new Date();
+  out.recordHash = record?.recordHash || makeRecordHash(out);
   return out;
 };
+
+const makeRecordHash = (record) => {
+  const payload = NUMERIC_FIELDS.reduce((obj, field) => {
+    obj[field] = Number(record?.[field]) || 0;
+    return obj;
+  }, { date: String(record?.date || "").slice(0, 10) });
+  return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+};
+
+const normalizeSyncPoints = (points = {}) => ({
+  lastFullSyncAt: points.lastFullSyncAt ? new Date(points.lastFullSyncAt) : null,
+  lastDailySyncAt: points.lastDailySyncAt ? new Date(points.lastDailySyncAt) : null,
+  lastWeeklySyncAt: points.lastWeeklySyncAt ? new Date(points.lastWeeklySyncAt) : null,
+  lastMonthlySyncAt: points.lastMonthlySyncAt ? new Date(points.lastMonthlySyncAt) : null,
+  lastSyncAt: points.lastSyncAt ? new Date(points.lastSyncAt) : null,
+  lastSyncRangeDays: Number(points.lastSyncRangeDays) || 0,
+});
 
 const nonZeroAverage = (records, field) => {
   const values = records
@@ -146,6 +166,112 @@ exports.syncHealthBulk = async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk Health Sync Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// Cached snapshot + incremental sync points
+// ============================================
+exports.getHealthSnapshot = async (req, res) => {
+  try {
+    const [records, syncPoint] = await Promise.all([
+      HealthRecord.find({ userId: req.user.id }).sort({ date: -1 }).lean(),
+      HealthSyncPoint.findOne({ userId: req.user.id }).lean(),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: records,
+      syncPoints: syncPoint || {},
+      source: "Pulse AI MongoDB cache",
+    });
+  } catch (error) {
+    console.error("Health Snapshot Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.updateHealthSyncPoints = async (req, res) => {
+  try {
+    const points = normalizeSyncPoints(req.body?.syncPoints || {});
+    const syncPoint = await HealthSyncPoint.findOneAndUpdate(
+      { userId: req.user.id },
+      { $set: { userId: req.user.id, ...points } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    res.status(200).json({ success: true, syncPoints: syncPoint });
+  } catch (error) {
+    console.error("Sync Point Update Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.syncHealthIncremental = async (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.records) ? req.body.records : [];
+    const normalized = incoming.map(normalizeRecord).filter((r) => r.date);
+    const dates = normalized.map((r) => r.date);
+    const existing = dates.length
+      ? await HealthRecord.find({ userId: req.user.id, date: { $in: dates } }).lean()
+      : [];
+    const existingByDate = new Map(existing.map((r) => [r.date, r]));
+
+    const changed = [];
+    let inserted = 0;
+    let updated = 0;
+
+    for (const record of normalized) {
+      const old = existingByDate.get(record.date);
+      if (!old) {
+        inserted++;
+        changed.push(record);
+      } else if (old.recordHash !== record.recordHash) {
+        updated++;
+        changed.push(record);
+      }
+    }
+
+    if (changed.length) {
+      await HealthRecord.bulkWrite(
+        changed.map((record) => ({
+          updateOne: {
+            filter: { userId: req.user.id, date: record.date },
+            update: { $set: { userId: req.user.id, ...record } },
+            upsert: true,
+          },
+        })),
+        { ordered: false }
+      );
+    }
+
+    const syncPoint = await HealthSyncPoint.findOneAndUpdate(
+      { userId: req.user.id },
+      {
+        $set: {
+          userId: req.user.id,
+          ...normalizeSyncPoints(req.body?.syncPoints || {}),
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    await UserProfile.findOneAndUpdate(
+      { userId: req.user.id },
+      { healthConnected: true },
+      { upsert: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      inserted,
+      updated,
+      changed: changed.length,
+      syncPoints: syncPoint,
+    });
+  } catch (error) {
+    console.error("Incremental Health Sync Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

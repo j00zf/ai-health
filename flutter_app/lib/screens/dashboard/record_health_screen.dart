@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/health_service.dart';
+import '../../core/services/auth_manager.dart';
 
 class RecordHealthScreen extends StatefulWidget {
   const RecordHealthScreen({super.key});
@@ -30,50 +31,35 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
     });
 
     try {
-      final authorized =
-          HealthService.isConnected ? true : await HealthService.connect();
-
-      if (!authorized) {
-        if (!mounted) return;
-        setState(() {
-          _records = [];
-          _source = 'Google Health not connected';
-          _rangeStart = null;
-          _rangeEnd = null;
-          _isLoading = false;
-          _errorMessage =
-              'Connect your Google Health account to view real health records.';
-        });
-        return;
+      final token = await AuthManager().getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Please login again to load saved health data.');
       }
 
-      final history = await HealthService.getAllHealthHistory(daysBack: 3650);
+      final history = await HealthService.loadStoredHealthHistory(token);
       final raw = history['records'];
       final records = raw is List
-          ? raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList()
+          ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
           : <Map<String, dynamic>>[];
 
       if (!mounted) return;
       setState(() {
         _records = records;
-        _source = history['source']?.toString() ?? 'Google Health Cloud API';
+        _source = history['source']?.toString() ?? 'Pulse AI MongoDB cache';
         _rangeStart = history['rangeStart']?.toString();
         _rangeEnd = history['rangeEnd']?.toString();
         _isLoading = false;
         _errorMessage = records.isEmpty
-            ? 'No real Google Health records were found for the available period.'
+            ? 'No saved health records are available yet. Sync Google Health from the dashboard.'
             : null;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _records = [];
-        _source = 'Google Health Cloud API';
+        _source = 'Pulse AI local app cache';
         _isLoading = false;
-        _errorMessage = 'Could not load full history: $e';
+        _errorMessage = 'Could not load saved health history: $e';
       });
     }
   }

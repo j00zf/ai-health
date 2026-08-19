@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/api_constants.dart';
 
@@ -463,7 +464,7 @@ class HealthService {
       final startDateKey = _formatDateKey(start);
       final endDateKey = _formatDateKey(end);
       filter = '$filterType.date >= "$startDateKey" '
-          'AND $filterType.date <= "$endDateKey"';
+          'AND $filterType.date < "$endDateKey"';
     } else if (dataType == 'steps' ||
         dataType == 'active-zone-minutes' ||
         dataType == 'distance' ||
@@ -545,6 +546,279 @@ class HealthService {
       'source': history['source'] ?? 'Disconnected',
       'platform': _platformName,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // LOCAL APP CACHE + SYNC-POINT ENGINE
+  // ---------------------------------------------------------------------------
+
+  static const String _localHistoryKey = 'pulse_ai_health_history_v2';
+  static const String _localSyncPointsKey = 'pulse_ai_health_sync_points_v2';
+
+  static Future<List<Map<String, dynamic>>> getLocalHealthHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_localHistoryKey);
+      if (raw == null || raw.isEmpty) return <Map<String, dynamic>>[];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <Map<String, dynamic>>[];
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } catch (e) {
+      _log('Local health cache read error: $e');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<void> _saveLocalHealthHistory(
+    List<Map<String, dynamic>> records,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_localHistoryKey, jsonEncode(records));
+    } catch (e) {
+      _log('Local health cache write error: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getLocalSyncPoints() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_localSyncPointsKey);
+      if (raw == null || raw.isEmpty) return <String, dynamic>{};
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : {};
+    } catch (e) {
+      _log('Local sync point read error: $e');
+      return <String, dynamic>{};
+    }
+  }
+
+  static Future<void> _saveLocalSyncPoints(Map<String, dynamic> points) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_localSyncPointsKey, jsonEncode(points));
+    } catch (e) {
+      _log('Local sync point write error: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> loadStoredHealthHistory(String jwt) async {
+    final local = await getLocalHealthHistory();
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/health-connect/snapshot'),
+        headers: {'Authorization': 'Bearer $jwt', 'Accept': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final raw = body['data'];
+        final records = raw is List
+            ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+            : local;
+        final points = body['syncPoints'] is Map
+            ? Map<String, dynamic>.from(body['syncPoints'])
+            : await getLocalSyncPoints();
+        await _saveLocalHealthHistory(records);
+        await _saveLocalSyncPoints(points);
+        return {
+          'records': records,
+          'syncPoints': points,
+          'source': 'Pulse AI MongoDB cache',
+          'rangeStart': records.isEmpty ? null : records.last['date'],
+          'rangeEnd': records.isEmpty ? null : records.first['date'],
+        };
+      }
+    } catch (e) {
+      _log('MongoDB health snapshot unavailable: $e');
+    }
+
+    final points = await getLocalSyncPoints();
+    local.sort((a, b) =>
+        (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
+    return {
+      'records': local,
+      'syncPoints': points,
+      'source': 'Pulse AI local app cache',
+      'rangeStart': local.isEmpty ? null : local.last['date'],
+      'rangeEnd': local.isEmpty ? null : local.first['date'],
+    };
+  }
+
+  static bool _isDue(dynamic value, Duration age) {
+    if (value == null) return true;
+    final parsed = DateTime.tryParse(value.toString());
+    if (parsed == null) return true;
+    return DateTime.now().toUtc().difference(parsed.toUtc()) >= age;
+  }
+
+  static bool _sameRecord(Map<String, dynamic> a, Map<String, dynamic> b) {
+    const fields = [
+      'date', 'steps', 'distanceWalked', 'calories', 'activeHours', 'floors',
+      'activeZoneMinutes', 'heartRate', 'restingHeartRate', 'sleepHours',
+      'bloodOxygen', 'bodyTemperature', 'weight',
+    ];
+    for (final field in fields) {
+      final av = a[field] is num ? (a[field] as num).toDouble() : a[field];
+      final bv = b[field] is num ? (b[field] as num).toDouble() : b[field];
+      if (av != bv) return false;
+    }
+    return true;
+  }
+
+  static Future<bool> isHealthSyncDue(String jwt) async {
+    final snapshot = await loadStoredHealthHistory(jwt);
+    final points = snapshot['syncPoints'] is Map
+        ? Map<String, dynamic>.from(snapshot['syncPoints'])
+        : <String, dynamic>{};
+    if (points['lastFullSyncAt'] == null) return true;
+    return _isDue(points['lastDailySyncAt'], const Duration(days: 1)) ||
+        _isDue(points['lastWeeklySyncAt'], const Duration(days: 7)) ||
+        _isDue(points['lastMonthlySyncAt'], const Duration(days: 30));
+  }
+
+  /// Performs only the sync window required by the daily/weekly/monthly
+  /// sync points. The first sync is a complete history import.
+  static Future<Map<String, dynamic>> smartSyncHealth(String jwt, {bool force = false}) async {
+    if (!await _ensureAuthenticated()) {
+      throw Exception('Google Health is not connected.');
+    }
+
+    final snapshot = await loadStoredHealthHistory(jwt);
+    final serverPoints = snapshot['syncPoints'] is Map
+        ? Map<String, dynamic>.from(snapshot['syncPoints'])
+        : <String, dynamic>{};
+    final localRecords = snapshot['records'] is List
+        ? snapshot['records'].whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+
+    final hasFull = serverPoints['lastFullSyncAt'] != null;
+    final dailyDue = force || _isDue(serverPoints['lastDailySyncAt'], const Duration(days: 1));
+    final weeklyDue = force || _isDue(serverPoints['lastWeeklySyncAt'], const Duration(days: 7));
+    final monthlyDue = force || _isDue(serverPoints['lastMonthlySyncAt'], const Duration(days: 30));
+
+    if (!force && hasFull && !dailyDue && !weeklyDue && !monthlyDue) {
+      return {
+        'changed': false,
+        'newRecords': 0,
+        'updatedRecords': 0,
+        'records': localRecords,
+        'syncPoints': serverPoints,
+        'skipped': true,
+      };
+    }
+
+    int daysBack;
+    if (!hasFull) {
+      daysBack = 3650;
+    } else if (monthlyDue) {
+      daysBack = 90;
+    } else if (weeklyDue) {
+      daysBack = 14;
+    } else {
+      daysBack = 3;
+    }
+
+    final google = await getAllHealthHistory(daysBack: daysBack);
+    final raw = google['records'];
+    final googleRecords = raw is List
+        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+
+    final byDate = <String, Map<String, dynamic>>{
+      for (final record in localRecords)
+        if ((record['date'] ?? '').toString().isNotEmpty) record['date'].toString(): record,
+    };
+    int newRecords = 0;
+    int updatedRecords = 0;
+    final changedRecords = <Map<String, dynamic>>[];
+
+    for (final record in googleRecords) {
+      final date = record['date']?.toString();
+      if (date == null || date.isEmpty) continue;
+      final old = byDate[date];
+      if (old == null) {
+        newRecords++;
+        byDate[date] = record;
+        changedRecords.add(record);
+      } else if (!_sameRecord(old, record)) {
+        updatedRecords++;
+        byDate[date] = record;
+        changedRecords.add(record);
+      }
+    }
+
+    final merged = byDate.values.toList()
+      ..sort((a, b) =>
+          (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
+
+    final now = DateTime.now().toUtc().toIso8601String();
+    final points = <String, dynamic>{...serverPoints};
+    points['lastDailySyncAt'] = now;
+    if (!hasFull) points['lastFullSyncAt'] = now;
+    if (weeklyDue || !hasFull) points['lastWeeklySyncAt'] = now;
+    if (monthlyDue || !hasFull) points['lastMonthlySyncAt'] = now;
+    points['lastSyncAt'] = now;
+    points['lastSyncRangeDays'] = daysBack;
+
+    // MongoDB is the authoritative server cache. Only changed/new rows are sent.
+    if (changedRecords.isNotEmpty || !hasFull) {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/health-connect/sync-incremental'),
+        headers: {
+          'Authorization': 'Bearer $jwt',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'records': changedRecords,
+          'syncPoints': points,
+          'source': 'Google Health Cloud API',
+        }),
+      );
+      if (response.statusCode != 200) {
+        throw Exception('Incremental health sync failed: ${response.body}');
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (body['syncPoints'] is Map) {
+        points
+          ..clear()
+          ..addAll(Map<String, dynamic>.from(body['syncPoints']));
+      }
+    } else {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/health-connect/sync-points'),
+        headers: {
+          'Authorization': 'Bearer $jwt',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'syncPoints': points}),
+      );
+      if (response.statusCode != 200) {
+        throw Exception('Sync point update failed: ${response.body}');
+      }
+    }
+
+    await _saveLocalHealthHistory(merged);
+    await _saveLocalSyncPoints(points);
+
+    return {
+      'changed': newRecords > 0 || updatedRecords > 0,
+      'newRecords': newRecords,
+      'updatedRecords': updatedRecords,
+      'records': merged,
+      'syncPoints': points,
+      'daysBack': daysBack,
+      'skipped': false,
+    };
+  }
+
+  static Future<void> clearLocalHealthCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_localHistoryKey);
+    await prefs.remove(_localSyncPointsKey);
   }
 
   // ---------------------------------------------------------------------------
