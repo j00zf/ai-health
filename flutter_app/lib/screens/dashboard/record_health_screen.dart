@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/health_service.dart';
 
-/// Shows every day of health data ever recorded for the signed-in user
-/// (steps, heart rate, floors, SpO2, active zone minutes, weight), newest
-/// day first.
 class RecordHealthScreen extends StatefulWidget {
   const RecordHealthScreen({super.key});
 
@@ -19,7 +16,6 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-
   @override
   void initState() {
     super.initState();
@@ -34,8 +30,6 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
     });
 
     try {
-      // Make sure we have an active session; HealthService.connect() is a
-      // no-op sign-in prompt if already connected in this run.
       final authorized =
           HealthService.isConnected ? true : await HealthService.connect();
 
@@ -47,25 +41,31 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
           _rangeStart = null;
           _rangeEnd = null;
           _isLoading = false;
-          _errorMessage = 'Connect your Google Health account to view real health records.';
+          _errorMessage =
+              'Connect your Google Health account to view real health records.';
         });
         return;
       }
 
-      final history = await HealthService.getAllHealthHistory();
-      final records =
-          (history['records'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final history = await HealthService.getAllHealthHistory(daysBack: 3650);
+      final raw = history['records'];
+      final records = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
 
       if (!mounted) return;
       setState(() {
         _records = records;
-        _source = history['source'] as String? ?? 'Google Health Cloud API';
-        _errorMessage = records.isEmpty
-            ? 'No real Google Health records were found for the selected period.'
-            : null;
-        _rangeStart = history['rangeStart'] as String?;
-        _rangeEnd = history['rangeEnd'] as String?;
+        _source = history['source']?.toString() ?? 'Google Health Cloud API';
+        _rangeStart = history['rangeStart']?.toString();
+        _rangeEnd = history['rangeEnd']?.toString();
         _isLoading = false;
+        _errorMessage = records.isEmpty
+            ? 'No real Google Health records were found for the available period.'
+            : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -78,69 +78,50 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
     }
   }
 
-  String _formatDisplayDate(String isoDate) {
+  double _n(dynamic value) => value is num
+      ? value.toDouble()
+      : double.tryParse(value?.toString() ?? '') ?? 0;
+
+  String _fmtDate(String value) {
     try {
-      final date = DateTime.parse(isoDate);
+      final date = DateTime.parse(value);
       const months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
       ];
       final today = DateTime.now();
-      final isToday = date.year == today.year &&
+      if (date.year == today.year &&
           date.month == today.month &&
-          date.day == today.day;
-      final yesterday = today.subtract(const Duration(days: 1));
-      final isYesterday = date.year == yesterday.year &&
-          date.month == yesterday.month &&
-          date.day == yesterday.day;
-
-      if (isToday) return 'Today';
-      if (isYesterday) return 'Yesterday';
-
+          date.day == today.day) {
+        return 'Today';
+      }
       return '${months[date.month - 1]} ${date.day}, ${date.year}';
     } catch (_) {
-      return isoDate;
+      return value;
     }
   }
 
-  Map<String, dynamic> get _summary {
-    if (_records.isEmpty) {
-      return {'avgSteps': 0, 'avgHr': 0, 'totalDays': 0};
-    }
-    int stepsSum = 0;
-    int hrSum = 0;
-    int hrCount = 0;
-    for (final r in _records) {
-      stepsSum += (r['steps'] as num?)?.toInt() ?? 0;
-      final hr = (r['heartRate'] as num?)?.toInt() ?? 0;
-      if (hr > 0) {
-        hrSum += hr;
-        hrCount++;
-      }
-    }
-    return {
-      'avgSteps': (stepsSum / _records.length).round(),
-      'avgHr': hrCount > 0 ? (hrSum / hrCount).round() : 0,
-      'totalDays': _records.length,
-    };
+  double _average(String key) {
+    final values =
+        _records.map((r) => _n(r[key])).where((v) => v > 0).toList();
+    if (values.isEmpty) return 0;
+    return values.reduce((a, b) => a + b) / values.length;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDemo = false;
-    final summary = _summary;
-
     return Scaffold(
       backgroundColor: const Color(0xfff4f7f6),
       appBar: AppBar(
         title: const Text(
-          "Health Record History",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+          'All Health History',
+          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black87),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
+            tooltip: 'Refresh all available history',
             icon: const Icon(Icons.refresh_rounded, color: Color(0xff9f6eff)),
             onPressed: _isLoading ? null : _loadHistory,
           ),
@@ -148,31 +129,31 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xff9f6eff)))
+              child: CircularProgressIndicator(color: Color(0xff9f6eff)),
+            )
           : RefreshIndicator(
               onRefresh: _loadHistory,
               color: const Color(0xff9f6eff),
               child: _records.isEmpty
-                  ? _buildEmptyState()
+                  ? _buildEmpty()
                   : ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16),
                       children: [
-                        _buildSummaryHeader(isDemo, summary),
-                        const SizedBox(height: 20),
+                        _buildSummary(),
+                        const SizedBox(height: 18),
                         if (_errorMessage != null) ...[
-                          _buildInlineNotice(_errorMessage!),
-                          const SizedBox(height: 16),
+                          _notice(_errorMessage!),
+                          const SizedBox(height: 14),
                         ],
                         Text(
-                          "${_records.length} day${_records.length == 1 ? '' : 's'} recorded",
+                          '${_records.length} recorded day${_records.length == 1 ? '' : 's'}',
                           style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: Colors.black45,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         ..._records.map(_buildDayCard),
                         const SizedBox(height: 24),
                       ],
@@ -181,60 +162,7 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-        const Icon(Icons.history_rounded, size: 56, color: Colors.black26),
-        const SizedBox(height: 16),
-        const Center(
-          child: Text(
-            "No health records found yet",
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.black54,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Center(
-          child: Text(
-            "Pull down to refresh once your device has\nsynced data to Google Health.",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.black38),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInlineNotice(String message) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline_rounded,
-              size: 18, color: Colors.orange),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryHeader(bool isDemo, Map<String, dynamic> summary) {
+  Widget _buildSummary() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -247,53 +175,44 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "All-Time Health History",
-            style: TextStyle(
-                color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 13),
+            'Complete Available Health History',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
           ),
           const SizedBox(height: 4),
           Text(
             _source,
             style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
           ),
           if (_rangeStart != null && _rangeEnd != null) ...[
             const SizedBox(height: 4),
             Text(
-              "$_rangeStart  →  $_rangeEnd",
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ],
-          if (isDemo) ...[
-            const SizedBox(height: 6),
-            const Text(
-              "Showing sample data for UI testing",
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              '$_rangeStart  →  $_rangeEnd',
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
             ),
           ],
           const SizedBox(height: 18),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: _buildSummaryStat(
-                  "Avg Steps/day",
-                  "${summary['avgSteps']}",
-                ),
+              _summaryChip('Steps', '${_average("steps").round()}/day'),
+              _summaryChip(
+                'Heart',
+                _average('heartRate') > 0
+                    ? '${_average("heartRate").toStringAsFixed(1)} BPM'
+                    : '—',
               ),
-              Container(width: 1, height: 30, color: Colors.white24),
-              Expanded(
-                child: _buildSummaryStat(
-                  "Avg Heart Rate",
-                  summary['avgHr'] > 0 ? "${summary['avgHr']} BPM" : "—",
-                ),
+              _summaryChip(
+                'Resting',
+                _average('restingHeartRate') > 0
+                    ? '${_average("restingHeartRate").toStringAsFixed(1)} BPM'
+                    : '—',
               ),
-              Container(width: 1, height: 30, color: Colors.white24),
-              Expanded(
-                child: _buildSummaryStat(
-                  "Days Tracked",
-                  "${summary['totalDays']}",
-                ),
-              ),
+              _summaryChip('Days', '${_records.length}'),
             ],
           ),
         ],
@@ -301,41 +220,55 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
     );
   }
 
-  Widget _buildSummaryStat(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white70, fontSize: 11),
-        ),
-      ],
+  Widget _summaryChip(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildDayCard(Map<String, dynamic> record) {
-    final steps = (record['steps'] as num?)?.toInt() ?? 0;
-    final hr = (record['heartRate'] as num?)?.toInt() ?? 0;
-    final floors = (record['floors'] as num?)?.toInt() ?? 0;
-    final spo2 = (record['bloodOxygen'] as num?)?.toDouble() ?? 0.0;
-    final azm = (record['activeZoneMinutes'] as num?)?.toInt() ?? 0;
-    final weight = (record['weight'] as num?)?.toDouble() ?? 0.0;
+  Widget _buildDayCard(Map<String, dynamic> r) {
+    final metrics = <Map<String, String>>[
+      {'label': 'Steps', 'value': '${_n(r["steps"]).round()}'},
+      {'label': 'Distance', 'value': '${_n(r["distanceWalked"]).toStringAsFixed(2)} km'},
+      {'label': 'Calories', 'value': '${_n(r["calories"]).round()} kcal'},
+      {'label': 'Active', 'value': '${_n(r["activeHours"]).toStringAsFixed(1)} h'},
+      {'label': 'Heart', 'value': _n(r["heartRate"]) > 0 ? '${_n(r["heartRate"]).round()} BPM' : '—'},
+      {'label': 'Resting', 'value': _n(r["restingHeartRate"]) > 0 ? '${_n(r["restingHeartRate"]).round()} BPM' : '—'},
+      {'label': 'Sleep', 'value': _n(r["sleepHours"]) > 0 ? '${_n(r["sleepHours"]).toStringAsFixed(1)} h' : '—'},
+      {'label': 'SpO₂', 'value': _n(r["bloodOxygen"]) > 0 ? '${_n(r["bloodOxygen"]).toStringAsFixed(1)}%' : '—'},
+      {'label': 'Floors', 'value': '${_n(r["floors"]).round()}'},
+      {'label': 'AZM', 'value': '${_n(r["activeZoneMinutes"]).round()} min'},
+      {'label': 'Weight', 'value': _n(r["weight"]) > 0 ? '${_n(r["weight"]).toStringAsFixed(1)} kg' : '—'},
+      {'label': 'Temp', 'value': _n(r["bodyTemperature"]) > 0 ? '${_n(r["bodyTemperature"]).toStringAsFixed(1)} °C' : '—'},
+    ];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(19),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(.035),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -345,49 +278,78 @@ class _RecordHealthScreenState extends State<RecordHealthScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _formatDisplayDate(record['date'] as String? ?? ''),
+            _fmtDate(r['date']?.toString() ?? ''),
             style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
               color: Color(0xff2d3748),
             ),
           ),
           const SizedBox(height: 12),
           Wrap(
-            spacing: 18,
+            spacing: 10,
             runSpacing: 10,
-            children: [
-              _buildMetricChip(Icons.directions_walk_rounded, Colors.orange,
-                  "$steps steps"),
-              _buildMetricChip(Icons.favorite_rounded, Colors.redAccent,
-                  hr > 0 ? "$hr BPM" : "— BPM"),
-              _buildMetricChip(
-                  Icons.stairs_rounded, Colors.purple, "$floors floors"),
-              _buildMetricChip(Icons.air_rounded, Colors.teal,
-                  spo2 > 0 ? "${spo2.toStringAsFixed(1)}% SpO₂" : "— SpO₂"),
-              _buildMetricChip(Icons.local_fire_department_rounded,
-                  Colors.deepOrange, "$azm min AZM"),
-              _buildMetricChip(Icons.monitor_weight_rounded, Colors.blueGrey,
-                  weight > 0 ? "${weight.toStringAsFixed(1)} kg" : "— kg"),
-            ],
+            children: metrics.map((m) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff7f7fb),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${m["label"]}: ',
+                        style: const TextStyle(
+                          color: Colors.black45,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      TextSpan(
+                        text: m["value"],
+                        style: const TextStyle(
+                          color: Color(0xff374151),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMetricChip(IconData icon, Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xff4a5568),
+  Widget _notice(String message) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(fontSize: 12, color: Colors.black54),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: const [
+        SizedBox(height: 220),
+        Icon(Icons.history_rounded, size: 58, color: Colors.black26),
+        SizedBox(height: 14),
+        Center(
+          child: Text(
+            'No health history found',
+            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black54),
           ),
         ),
       ],

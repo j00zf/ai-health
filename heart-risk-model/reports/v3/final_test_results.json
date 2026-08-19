@@ -1,0 +1,32 @@
+{
+  "probability_metrics": {
+    "roc_auc": 0.7339866955612337,
+    "pr_auc": 0.3433941602074836,
+    "brier_score": 0.1165458557764749,
+    "log_loss": 0.3806006701381254
+  },
+  "threshold_metrics": {
+    "threshold": 0.175,
+    "accuracy": 0.7216981132075472,
+    "balanced_accuracy": 0.6736746773619691,
+    "precision": 0.2965779467680608,
+    "recall": 0.6046511627906976,
+    "sensitivity": 0.6046511627906976,
+    "specificity": 0.7426981919332406,
+    "f1": 0.3979591836734694,
+    "tn": 534,
+    "fp": 185,
+    "fn": 51,
+    "tp": 78
+  },
+  "threshold": 0.175,
+  "calibration": "sigmoid",
+  "best_hyperparameters": {
+    "model__C": 0.03,
+    "model__class_weight": null,
+    "model__penalty": "l1",
+    "model__solver": "liblinear"
+  },
+  "final_test_random_state": 20260818,
+  "note": "This final test set was created with a new random state and was not used during hyperparameter tuning, calibration, or threshold selection."
+}

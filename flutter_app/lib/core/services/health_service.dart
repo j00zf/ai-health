@@ -18,6 +18,9 @@ class HealthService {
   static const String scopeMetrics =
       'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly';
 
+  static const String scopeSleep =
+      'https://www.googleapis.com/auth/googlehealth.sleep.readonly';
+
   // ---------------------------------------------------------------------------
   // Google Sign-In
   // ---------------------------------------------------------------------------
@@ -26,6 +29,7 @@ class HealthService {
     scopes: [
       scopeActivity,
       scopeMetrics,
+      scopeSleep,
     ],
     serverClientId:
         '594020358294-p8k9knp8e5l2ogpn2rkc391ktmlf8t46.apps.googleusercontent.com',
@@ -439,67 +443,90 @@ class HealthService {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    if (_accessToken == null) {
-      _log('Cannot fetch $dataType → not connected');
+    if (!await _ensureAuthenticated()) {
+      _log('Cannot fetch $dataType → not authenticated');
       return null;
     }
 
-    final startIso = _iso(startDate ?? _startDate);
-    final endIso = _iso(endDate ?? _endDate);
-
+    final start = startDate ?? _startDate;
+    final end = endDate ?? _endDate;
+    final startIso = _iso(start);
+    final endIso = _iso(end);
     final filterType = dataType.replaceAll('-', '_');
 
     String filter;
-
-    if (dataType == 'steps' || dataType == 'active-zone-minutes') {
+    if (dataType == 'daily-resting-heart-rate' ||
+        dataType == 'daily-heart-rate-variability' ||
+        dataType == 'daily-oxygen-saturation' ||
+        dataType == 'daily-respiratory-rate' ||
+        dataType == 'daily-vo2-max') {
+      final startDateKey = _formatDateKey(start);
+      final endDateKey = _formatDateKey(end);
+      filter = '$filterType.date >= "$startDateKey" '
+          'AND $filterType.date <= "$endDateKey"';
+    } else if (dataType == 'steps' ||
+        dataType == 'active-zone-minutes' ||
+        dataType == 'distance' ||
+        dataType == 'total-calories' ||
+        dataType == 'active-energy-burned' ||
+        dataType == 'active-minutes' ||
+        dataType == 'floors' ||
+        dataType == 'sleep') {
       filter = '$filterType.interval.start_time >= "$startIso" '
           'AND $filterType.interval.start_time < "$endIso"';
+    } else if (dataType == 'core-body-temperature') {
+      filter = '$filterType.sample_time.physical_time >= "$startIso" '
+          'AND $filterType.sample_time.physical_time < "$endIso"';
     } else {
       filter = '$filterType.sample_time.physical_time >= "$startIso" '
           'AND $filterType.sample_time.physical_time < "$endIso"';
     }
 
-    final url = Uri.parse(
-      'https://health.googleapis.com/v4/users/me/'
-      'dataTypes/$dataType/dataPoints',
-    ).replace(
-      queryParameters: {
-        'filter': filter,
-      },
-    );
-
-    _log('GET list → $dataType ($startIso → $endIso)');
+    final List<dynamic> allPoints = [];
+    String? pageToken;
 
     try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Accept': 'application/json',
-        },
-      );
+      do {
+        final query = <String, String>{
+          'filter': filter,
+          'page_size': '1000',
+        };
+        if (pageToken != null && pageToken.isNotEmpty) {
+          query['page_token'] = pageToken;
+        }
 
-      _log('list $dataType → ${response.statusCode}');
+        final url = Uri.parse(
+          'https://health.googleapis.com/v4/users/me/'
+          'dataTypes/$dataType/dataPoints',
+        ).replace(queryParameters: query);
 
-      if (response.statusCode != 200) {
-        _log('API ERROR $dataType: ${response.body}');
+        final response = await http.get(
+          url,
+          headers: {
+            'Authorization': 'Bearer $_accessToken',
+            'Accept': 'application/json',
+          },
+        );
 
-        return null;
-      }
+        _log('list $dataType → ${response.statusCode}');
 
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        if (response.statusCode != 200) {
+          _log('API ERROR $dataType: ${response.body}');
+          return null;
+        }
 
-      final points = decoded['dataPoints'];
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final points = decoded['dataPoints'];
+        if (points is List) {
+          allPoints.addAll(points);
+        }
+        pageToken = decoded['nextPageToken']?.toString();
+      } while (pageToken != null && pageToken!.isNotEmpty);
 
-      _log(
-        '$dataType returned '
-        '${points is List ? points.length : 0} data points',
-      );
-
-      return decoded;
+      _log('$dataType returned ${allPoints.length} data points across all pages');
+      return {'dataPoints': allPoints};
     } catch (e) {
       _log('Exception fetching $dataType: $e');
-
       return null;
     }
   }
@@ -509,146 +536,15 @@ class HealthService {
   // ---------------------------------------------------------------------------
 
   static Future<Map<String, dynamic>> getTodayHealthData() async {
-    if (!await _ensureAuthenticated()) {
-      _log('getTodayHealthData called while disconnected');
-
-      return {
-        'source': 'Disconnected',
-        'platform': _platformName,
-      };
+    final history = await getAllHealthHistory(daysBack: 30);
+    final records = history['records'];
+    if (records is List && records.isNotEmpty) {
+      return Map<String, dynamic>.from(records.first as Map);
     }
-
-    _log('Fetching health data for last 30 days...');
-
-    final results = await Future.wait([
-      _fetchDataPoints('steps'),
-      _fetchDataPoints('heart-rate'),
-      _fetchDailyRollupChunked('floors', startDate: _startDate, endDate: _endDate),
-      _fetchDataPoints('oxygen-saturation'),
-      _fetchDataPoints('active-zone-minutes'),
-      _fetchDataPoints('weight'),
-    ]);
-
-    final stepsBody = results[0];
-    final hrBody = results[1];
-    final floorsBody = results[2];
-    final spo2Body = results[3];
-    final azmBody = results[4];
-    final weightBody = results[5];
-
-    int totalSteps = 0;
-
-    final stepPoints = stepsBody?['dataPoints'];
-
-    if (stepPoints is List) {
-      for (final point in stepPoints) {
-        final count = point['steps']?['count'];
-
-        totalSteps += _toInt(count);
-      }
-    }
-
-    int latestHr = 0;
-
-    final hrPoints = hrBody?['dataPoints'];
-
-    if (hrPoints is List && hrPoints.isNotEmpty) {
-      for (final point in hrPoints) {
-        final bpm = point['heartRate']?['beatsPerMinute'];
-
-        final value = _toInt(bpm);
-
-        if (value > 0) {
-          latestHr = value;
-        }
-      }
-    }
-
-    int floors = 0;
-
-    final rollups = floorsBody?['rollupDataPoints'];
-
-    if (rollups is List) {
-      for (final row in rollups) {
-        final value =
-            row['floors']?['count_sum'] ?? row['floors']?['countSum'];
-
-        floors += _toInt(value);
-      }
-    }
-
-    double spo2 = 0;
-
-    final spo2Points = spo2Body?['dataPoints'];
-
-    if (spo2Points is List && spo2Points.isNotEmpty) {
-      for (final point in spo2Points) {
-        final value = point['oxygenSaturation']?['percentage'];
-
-        final parsed = _toDouble(value);
-
-        if (parsed > 0) {
-          spo2 = parsed;
-        }
-      }
-    }
-
-    int azm = 0;
-
-    final azmPoints = azmBody?['dataPoints'];
-
-    if (azmPoints is List) {
-      for (final point in azmPoints) {
-        final value = point['activeZoneMinutes']?['activeZoneMinutes'];
-
-        azm += _toInt(value);
-      }
-    }
-
-    double weightKg = 0;
-
-    final weightPoints = weightBody?['dataPoints'];
-
-    if (weightPoints is List && weightPoints.isNotEmpty) {
-      for (final point in weightPoints) {
-        final value = point['weight']?['weightKg'];
-
-        final parsed = _toDouble(value);
-
-        if (parsed > 0) {
-          weightKg = parsed;
-        }
-      }
-    }
-
-    final result = {
-      'steps': totalSteps,
-      'heartRate': latestHr,
-      'restingHeartRate': 0,
-      'calories': 0,
-      'floors': floors,
-      'bloodOxygen': spo2,
-      'activeZoneMinutes': azm,
-      'weight': weightKg,
-      'distanceWalked': 0.0,
-      'sleepHours': 0.0,
-      'source': 'Google Health Cloud API',
-      'platform': _currentPlatform ?? _platformName,
-      'email': _userEmail,
-      'syncedAt': DateTime.now().toUtc().toIso8601String(),
+    return {
+      'source': history['source'] ?? 'Disconnected',
+      'platform': _platformName,
     };
-
-    _log(
-      'Fetch complete → '
-      'steps=$totalSteps, '
-      'hr=$latestHr, '
-      'floors=$floors, '
-      'spo2=$spo2, '
-      'azm=$azm, '
-      'weight=$weightKg',
-    );
-
-    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -679,11 +575,9 @@ class HealthService {
   ///   'totalDaysWithData': 42,
   /// }
   static Future<Map<String, dynamic>> getAllHealthHistory({
-    int daysBack = 1825, // ~5 years
+    int daysBack = 3650, // ~10 years; API returns only data actually available
   }) async {
     if (!await _ensureAuthenticated()) {
-      _log('getAllHealthHistory called while disconnected');
-
       return {
         'records': <Map<String, dynamic>>[],
         'source': 'Disconnected',
@@ -694,82 +588,122 @@ class HealthService {
     final start = DateTime.now().toUtc().subtract(Duration(days: daysBack));
     final end = DateTime.now().toUtc();
 
-    _log('Fetching ALL-TIME health history (${_iso(start)} → ${_iso(end)})');
+    _log('Fetching complete available health history (${_iso(start)} → ${_iso(end)})');
 
     final results = await Future.wait([
       _fetchDataPoints('steps', startDate: start, endDate: end),
-      _fetchDataPoints('heart-rate', startDate: start, endDate: end),
+      _fetchDataPoints('distance', startDate: start, endDate: end),
+      _fetchDataPoints('total-calories', startDate: start, endDate: end),
+      _fetchDataPoints('active-minutes', startDate: start, endDate: end),
       _fetchDailyRollupChunked('floors', startDate: start, endDate: end),
+      _fetchDataPoints('heart-rate', startDate: start, endDate: end),
+      _fetchDataPoints('daily-resting-heart-rate', startDate: start, endDate: end),
+      _fetchDataPoints('sleep', startDate: start, endDate: end),
       _fetchDataPoints('oxygen-saturation', startDate: start, endDate: end),
-      _fetchDataPoints('active-zone-minutes',
-          startDate: start, endDate: end),
+      _fetchDataPoints('active-zone-minutes', startDate: start, endDate: end),
       _fetchDataPoints('weight', startDate: start, endDate: end),
+      _fetchDataPoints('core-body-temperature', startDate: start, endDate: end),
     ]);
 
-    final stepsBody = results[0];
-    final hrBody = results[1];
-    final floorsBody = results[2];
-    final spo2Body = results[3];
-    final azmBody = results[4];
-    final weightBody = results[5];
-
-    // date key -> partial record
     final Map<String, Map<String, dynamic>> byDate = {};
 
     Map<String, dynamic> bucket(String dateKey) {
-      return byDate.putIfAbsent(
-        dateKey,
-        () => {
-          'date': dateKey,
-          'steps': 0,
-          'heartRate': 0,
-          'floors': 0,
-          'bloodOxygen': 0.0,
-          'activeZoneMinutes': 0,
-          'weight': 0.0,
-        },
-      );
+      return byDate.putIfAbsent(dateKey, () => {
+        'date': dateKey,
+        'steps': 0,
+        'distanceWalked': 0.0,
+        'calories': 0.0,
+        'activeHours': 0.0,
+        'heartRate': 0,
+        'restingHeartRate': 0,
+        'floors': 0,
+        'sleepHours': 0.0,
+        'bloodOxygen': 0.0,
+        'activeZoneMinutes': 0,
+        'weight': 0.0,
+        'bodyTemperature': 0.0,
+      });
     }
 
-    // STEPS — sum per day
-    final stepPoints = stepsBody?['dataPoints'];
+    void setLatest(String dateKey, String key, num value) {
+      if (value > 0) bucket(dateKey)[key] = value;
+    }
+
+    // Steps — sum per day.
+    final stepPoints = results[0]?['dataPoints'];
     if (stepPoints is List) {
       for (final raw in stepPoints) {
         if (raw is! Map<String, dynamic>) continue;
         final dateKey = _dateKeyFromPoint(raw, 'steps');
         if (dateKey == null) continue;
-        final count = _toInt(raw['steps']?['count']);
-        final record = bucket(dateKey);
-        record['steps'] = (_toInt(record['steps']) + count);
+        bucket(dateKey)['steps'] =
+            _toInt(bucket(dateKey)['steps']) + _toInt(raw['steps']?['count']);
       }
     }
 
-    // HEART RATE — latest reading per day
-    final hrPoints = hrBody?['dataPoints'];
-    if (hrPoints is List) {
-      for (final raw in hrPoints) {
+    // Distance — sum meters and expose km.
+    final distancePoints = results[1]?['dataPoints'];
+    if (distancePoints is List) {
+      for (final raw in distancePoints) {
         if (raw is! Map<String, dynamic>) continue;
-        final dateKey = _dateKeyFromPoint(raw, 'heartRate');
+        final dateKey = _dateKeyFromPoint(raw, 'distance');
         if (dateKey == null) continue;
-        final value = _toInt(raw['heartRate']?['beatsPerMinute']);
-        if (value <= 0) continue;
-        bucket(dateKey)['heartRate'] = value;
+        final meters = _toDouble(
+          raw['distance']?['distanceMeters'] ??
+              raw['distance']?['meters'] ??
+              raw['distance']?['value'],
+        );
+        if (meters > 0) {
+          bucket(dateKey)['distanceWalked'] =
+              _toDouble(bucket(dateKey)['distanceWalked']) + meters / 1000.0;
+        }
       }
     }
 
-    // FLOORS — daily rollup already gives one row per day
-    final rollups = floorsBody?['rollupDataPoints'];
-    if (rollups is List) {
-      for (final raw in rollups) {
+    // Total calories — sum kcal per day.
+    final caloriePoints = results[2]?['dataPoints'];
+    if (caloriePoints is List) {
+      for (final raw in caloriePoints) {
         if (raw is! Map<String, dynamic>) continue;
+        final dateKey = _dateKeyFromPoint(raw, 'totalCalories');
+        if (dateKey == null) continue;
+        final kcal = _toDouble(
+          raw['totalCalories']?['kcal'] ??
+              raw['totalCalories']?['calories'] ??
+              raw['totalCalories']?['kilocalories'],
+        );
+        if (kcal > 0) {
+          bucket(dateKey)['calories'] =
+              _toDouble(bucket(dateKey)['calories']) + kcal;
+        }
+      }
+    }
 
+    // Active minutes — sum and convert to hours.
+    final activePoints = results[3]?['dataPoints'];
+    if (activePoints is List) {
+      for (final raw in activePoints) {
+        if (raw is! Map<String, dynamic>) continue;
+        final dateKey = _dateKeyFromPoint(raw, 'activeMinutes');
+        if (dateKey == null) continue;
+        final minutes = _toDouble(
+          raw['activeMinutes']?['minutes'] ??
+              raw['activeMinutes']?['activeMinutes'] ??
+              raw['activeMinutes']?['durationMinutes'],
+        );
+        if (minutes > 0) {
+          bucket(dateKey)['activeHours'] =
+              _toDouble(bucket(dateKey)['activeHours']) + minutes / 60.0;
+        }
+      }
+    }
+
+    // Floors — daily rollup.
+    final floorRows = results[4]?['rollupDataPoints'];
+    if (floorRows is List) {
+      for (final raw in floorRows) {
+        if (raw is! Map<String, dynamic>) continue;
         String? dateKey = _dateKeyFromPoint(raw, 'floors');
-
-        // Daily rollups don't carry a plain timestamp — Google returns the
-        // bucket date as a y/m/d object, typically under
-        // `civilStartTime.date` or `range.startTime.date` (confirmed against
-        // a known-working reference implementation). Try every shape we've
-        // seen before giving up on this row.
         if (dateKey == null) {
           final dateObj = _dig(raw, [
             ['civilStartTime', 'date'],
@@ -786,21 +720,95 @@ class HealthService {
             }
           }
         }
-
-        if (dateKey == null) {
-          _log('floors rollup row skipped — no recognizable date field: $raw');
-          continue;
-        }
-
+        if (dateKey == null) continue;
         final value =
             raw['floors']?['count_sum'] ?? raw['floors']?['countSum'];
-        final record = bucket(dateKey);
-        record['floors'] = _toInt(record['floors']) + _toInt(value);
+        bucket(dateKey)['floors'] =
+            _toInt(bucket(dateKey)['floors']) + _toInt(value);
       }
     }
 
-    // SpO2 — latest reading per day
-    final spo2Points = spo2Body?['dataPoints'];
+    // Heart rate — average the day's samples, rather than keeping only the last
+    // sample. This makes weekly/monthly averages statistically useful.
+    final hrSums = <String, double>{};
+    final hrCounts = <String, int>{};
+    final hrPoints = results[5]?['dataPoints'];
+    if (hrPoints is List) {
+      for (final raw in hrPoints) {
+        if (raw is! Map<String, dynamic>) continue;
+        final dateKey = _dateKeyFromPoint(raw, 'heartRate');
+        if (dateKey == null) continue;
+        final value = _toDouble(raw['heartRate']?['beatsPerMinute']);
+        if (value <= 0) continue;
+        hrSums[dateKey] = (hrSums[dateKey] ?? 0) + value;
+        hrCounts[dateKey] = (hrCounts[dateKey] ?? 0) + 1;
+      }
+    }
+    for (final entry in hrSums.entries) {
+      bucket(entry.key)['heartRate'] = entry.value / (hrCounts[entry.key] ?? 1);
+    }
+
+    // Resting BPM — one daily computed value.
+    final restingPoints = results[6]?['dataPoints'];
+    if (restingPoints is List) {
+      for (final raw in restingPoints) {
+        if (raw is! Map<String, dynamic>) continue;
+        final dateObj = raw['dailyRestingHeartRate']?['date'] ??
+            raw['dailyRestingHeartRate']?['civilDate'] ??
+            raw['date'];
+        String? dateKey;
+        if (dateObj is Map<String, dynamic>) {
+          final y = _toInt(dateObj['year']);
+          final m = _toInt(dateObj['month']);
+          final d = _toInt(dateObj['day']);
+          if (y > 0 && m > 0 && d > 0) {
+            dateKey = _formatDateKey(DateTime.utc(y, m, d));
+          }
+        }
+        dateKey ??= _dateKeyFromPoint(raw, 'dailyRestingHeartRate');
+        if (dateKey == null) continue;
+        final value = _toInt(
+          raw['dailyRestingHeartRate']?['beatsPerMinute'] ??
+              raw['daily_resting_heart_rate']?['beatsPerMinute'],
+        );
+        setLatest(dateKey, 'restingHeartRate', value);
+      }
+    }
+
+    // Sleep — sum sleep minutes for the calendar date of the sleep session.
+    final sleepPoints = results[7]?['dataPoints'];
+    if (sleepPoints is List) {
+      for (final raw in sleepPoints) {
+        if (raw is! Map<String, dynamic>) continue;
+        final interval = raw['sleep']?['interval'];
+        final startTime = interval?['startTime'];
+        if (startTime is! String) continue;
+        final parsed = DateTime.tryParse(startTime);
+        if (parsed == null) continue;
+        final dateKey = _formatDateKey(parsed.toUtc());
+        double hours = 0;
+        final minutesAsleep =
+            _toDouble(raw['sleep']?['summary']?['minutesAsleep']);
+        if (minutesAsleep > 0) {
+          hours = minutesAsleep / 60.0;
+        } else {
+          final endTime = interval?['endTime'];
+          final endParsed = endTime is String ? DateTime.tryParse(endTime) : null;
+          if (endParsed != null) {
+            hours = endParsed.difference(parsed).inMinutes / 60.0;
+          }
+        }
+        if (hours > 0) {
+          bucket(dateKey)['sleepHours'] =
+              _toDouble(bucket(dateKey)['sleepHours']) + hours;
+        }
+      }
+    }
+
+    // SpO2 — average daily samples.
+    final spo2Sums = <String, double>{};
+    final spo2Counts = <String, int>{};
+    final spo2Points = results[8]?['dataPoints'];
     if (spo2Points is List) {
       for (final raw in spo2Points) {
         if (raw is! Map<String, dynamic>) continue;
@@ -808,12 +816,17 @@ class HealthService {
         if (dateKey == null) continue;
         final value = _toDouble(raw['oxygenSaturation']?['percentage']);
         if (value <= 0) continue;
-        bucket(dateKey)['bloodOxygen'] = value;
+        spo2Sums[dateKey] = (spo2Sums[dateKey] ?? 0) + value;
+        spo2Counts[dateKey] = (spo2Counts[dateKey] ?? 0) + 1;
       }
     }
+    for (final entry in spo2Sums.entries) {
+      bucket(entry.key)['bloodOxygen'] =
+          entry.value / (spo2Counts[entry.key] ?? 1);
+    }
 
-    // ACTIVE ZONE MINUTES — sum per day
-    final azmPoints = azmBody?['dataPoints'];
+    // Active Zone Minutes — sum per day.
+    final azmPoints = results[9]?['dataPoints'];
     if (azmPoints is List) {
       for (final raw in azmPoints) {
         if (raw is! Map<String, dynamic>) continue;
@@ -821,40 +834,96 @@ class HealthService {
         if (dateKey == null) continue;
         final value =
             _toInt(raw['activeZoneMinutes']?['activeZoneMinutes']);
-        final record = bucket(dateKey);
-        record['activeZoneMinutes'] =
-            _toInt(record['activeZoneMinutes']) + value;
+        bucket(dateKey)['activeZoneMinutes'] =
+            _toInt(bucket(dateKey)['activeZoneMinutes']) + value;
       }
     }
 
-    // WEIGHT — latest reading per day
-    final weightPoints = weightBody?['dataPoints'];
+    // Weight — latest reading per day.
+    final weightPoints = results[10]?['dataPoints'];
     if (weightPoints is List) {
       for (final raw in weightPoints) {
         if (raw is! Map<String, dynamic>) continue;
         final dateKey = _dateKeyFromPoint(raw, 'weight');
         if (dateKey == null) continue;
-        final value = _toDouble(raw['weight']?['weightKg']);
-        if (value <= 0) continue;
-        bucket(dateKey)['weight'] = value;
+        setLatest(
+          dateKey,
+          'weight',
+          _toDouble(raw['weight']?['weightKg']),
+        );
+      }
+    }
+
+    // Core temperature — latest reading per day, accepting common API key shapes.
+    final temperaturePoints = results[11]?['dataPoints'];
+    if (temperaturePoints is List) {
+      for (final raw in temperaturePoints) {
+        if (raw is! Map<String, dynamic>) continue;
+        final dateKey = _dateKeyFromPoint(raw, 'coreBodyTemperature');
+        if (dateKey == null) continue;
+        final value = _toDouble(
+          raw['coreBodyTemperature']?['temperatureCelsius'] ??
+              raw['coreBodyTemperature']?['degreesCelsius'] ??
+              raw['coreBodyTemperature']?['celsius'],
+        );
+        setLatest(dateKey, 'bodyTemperature', value);
       }
     }
 
     final records = byDate.values.toList()
       ..sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
 
-    _log('All-time history parsed → ${records.length} days with data');
-
     return {
       'records': records,
       'source': 'Google Health Cloud API',
       'platform': _currentPlatform ?? _platformName,
       'email': _userEmail,
-      'rangeStart': _formatDateKey(start),
-      'rangeEnd': _formatDateKey(end),
+      'rangeStart': records.isEmpty
+          ? null
+          : records.last['date'],
+      'rangeEnd': records.isEmpty
+          ? null
+          : records.first['date'],
       'totalDaysWithData': records.length,
       'fetchedAt': DateTime.now().toUtc().toIso8601String(),
     };
+  }
+
+  /// Persists the complete Google Health history to MongoDB.
+  /// The backend upserts by (user, date), so re-syncing is safe.
+  static Future<bool> syncHistoryToBackend(
+    String jwt,
+    List<Map<String, dynamic>> records,
+  ) async {
+    if (records.isEmpty) return true;
+    try {
+      const chunkSize = 250;
+      for (var i = 0; i < records.length; i += chunkSize) {
+        final chunk = records.sublist(
+          i,
+          (i + chunkSize).clamp(0, records.length),
+        );
+        final response = await http.post(
+          Uri.parse('${ApiConstants.baseUrl}/health-connect/sync-bulk'),
+          headers: {
+            'Authorization': 'Bearer $jwt',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'records': chunk,
+            'source': 'Google Health Cloud API',
+          }),
+        );
+        if (response.statusCode != 200) {
+          _log('Bulk history sync failed: ${response.statusCode}');
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      _log('Bulk history sync error: $e');
+      return false;
+    }
   }
 
   /// Saves the newest daily record to the application backend. The backend

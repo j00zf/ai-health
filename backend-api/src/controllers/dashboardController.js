@@ -34,6 +34,15 @@ exports.getDashboard = async (req, res) => {
           steps: latestRecord?.steps ?? 0,
           calories: latestRecord?.calories ?? 0,
           sleep: latestRecord?.sleepHours ?? 0,
+          heartRate: latestRecord?.heartRate ?? 0,
+          restingHeartRate: latestRecord?.restingHeartRate ?? 0,
+          distanceWalked: latestRecord?.distanceWalked ?? 0,
+          activeHours: latestRecord?.activeHours ?? 0,
+          floors: latestRecord?.floors ?? 0,
+          activeZoneMinutes: latestRecord?.activeZoneMinutes ?? 0,
+          bloodOxygen: latestRecord?.bloodOxygen ?? 0,
+          bodyTemperature: latestRecord?.bodyTemperature ?? 0,
+          weight: latestRecord?.weight ?? 0,
         },
 
         // Matches the key the Flutter DashboardScreen reads:

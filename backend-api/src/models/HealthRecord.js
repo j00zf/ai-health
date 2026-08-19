@@ -9,7 +9,7 @@ const healthRecordSchema = new mongoose.Schema(
       index: true,
     },
 
-    // YYYY-MM-DD — one record per user per calendar day
+    // YYYY-MM-DD — one record per user per calendar day.
     date: {
       type: String,
       required: true,
@@ -19,7 +19,7 @@ const healthRecordSchema = new mongoose.Schema(
     // Activity
     steps: { type: Number, default: 0 },
     distanceWalked: { type: Number, default: 0 }, // km
-    calories: { type: Number, default: 0 },
+    calories: { type: Number, default: 0 }, // kcal
     activeHours: { type: Number, default: 0 },
     floors: { type: Number, default: 0 },
     activeZoneMinutes: { type: Number, default: 0 },
@@ -31,9 +31,9 @@ const healthRecordSchema = new mongoose.Schema(
     // Sleep
     sleepHours: { type: Number, default: 0 },
 
-    // Advanced
+    // Advanced measurements
     bloodOxygen: { type: Number, default: 0 },
-    bodyTemperature: { type: Number, default: 0 },
+    bodyTemperature: { type: Number, default: 0 }, // °C
     weight: { type: Number, default: 0 }, // kg
 
     // Meta
@@ -43,11 +43,8 @@ const healthRecordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// One record per user per day — every sync upserts into this document
 healthRecordSchema.index({ userId: 1, date: 1 }, { unique: true });
 
-// Guard against OverwriteModelError if this file is ever required twice
-// (e.g. via hot-reload) — reuse the already-compiled model when present.
 module.exports =
   mongoose.models.HealthRecord ||
   mongoose.model("HealthRecord", healthRecordSchema);

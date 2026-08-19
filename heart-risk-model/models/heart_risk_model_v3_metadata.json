@@ -1,0 +1,95 @@
+{
+  "model_version": "heart-risk-v3",
+  "model_type": "logistic_regression",
+  "calibration": "sigmoid",
+  "threshold": 0.175,
+  "features": [
+    "male",
+    "age",
+    "currentSmoker",
+    "cigsPerDay",
+    "BPMeds",
+    "prevalentStroke",
+    "prevalentHyp",
+    "diabetes",
+    "totChol",
+    "sysBP",
+    "diaBP",
+    "BMI",
+    "heartRate",
+    "glucose"
+  ],
+  "numeric_features": [
+    "age",
+    "cigsPerDay",
+    "totChol",
+    "sysBP",
+    "diaBP",
+    "BMI",
+    "heartRate",
+    "glucose"
+  ],
+  "categorical_features": [
+    "male",
+    "currentSmoker",
+    "BPMeds",
+    "prevalentStroke",
+    "prevalentHyp",
+    "diabetes"
+  ],
+  "target": "TenYearCHD",
+  "positive_rate": 0.15188679245283018,
+  "development_samples": 3392,
+  "final_test_samples": 848,
+  "hyperparameters": {
+    "model__C": 0.03,
+    "model__class_weight": null,
+    "model__penalty": "l1",
+    "model__solver": "liblinear"
+  },
+  "cv_roc_auc": 0.7268503763894751,
+  "calibration_metrics": [
+    {
+      "calibration": "uncalibrated",
+      "roc_auc": 0.7261865953950143,
+      "pr_auc": 0.33746146284118994,
+      "brier_score": 0.11694612687015872,
+      "log_loss": 0.3847891756050253
+    },
+    {
+      "calibration": "sigmoid",
+      "roc_auc": 0.721730092362932,
+      "pr_auc": 0.34048834398597877,
+      "brier_score": 0.11662567577490428,
+      "log_loss": 0.38302276814203523
+    },
+    {
+      "calibration": "isotonic",
+      "roc_auc": 0.7187077963493527,
+      "pr_auc": 0.33472908781311717,
+      "brier_score": 0.1168014979083131,
+      "log_loss": 0.3850192491877783
+    }
+  ],
+  "final_test_probability_metrics": {
+    "roc_auc": 0.7339866955612337,
+    "pr_auc": 0.3433941602074836,
+    "brier_score": 0.1165458557764749,
+    "log_loss": 0.3806006701381254
+  },
+  "final_test_threshold_metrics": {
+    "threshold": 0.175,
+    "accuracy": 0.7216981132075472,
+    "balanced_accuracy": 0.6736746773619691,
+    "precision": 0.2965779467680608,
+    "recall": 0.6046511627906976,
+    "sensitivity": 0.6046511627906976,
+    "specificity": 0.7426981919332406,
+    "f1": 0.3979591836734694,
+    "tn": 534,
+    "fp": 185,
+    "fn": 51,
+    "tp": 78
+  },
+  "final_test_random_state": 20260818
+}
