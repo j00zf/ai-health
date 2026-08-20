@@ -402,7 +402,7 @@ class HealthService {
     String dataType, {
     required DateTime startDate,
     required DateTime endDate,
-    int maxChunkDays = 89, // stay just under Google's 90-day ceiling
+    int? maxChunkDays, // Google limits some rollups to 14 days
   }) async {
     if (_accessToken == null) {
       _log('Cannot fetch $dataType → not connected');
@@ -410,10 +410,16 @@ class HealthService {
     }
 
     final List<dynamic> mergedPoints = [];
+    final effectiveMaxChunkDays = maxChunkDays ??
+        ((dataType == 'total-calories' ||
+                dataType == 'active-minutes' ||
+                dataType == 'heart-rate')
+            ? 13
+            : 89);
     DateTime chunkStart = startDate;
 
     while (chunkStart.isBefore(endDate)) {
-      final proposedEnd = chunkStart.add(Duration(days: maxChunkDays));
+      final proposedEnd = chunkStart.add(Duration(days: effectiveMaxChunkDays));
       final chunkEnd = proposedEnd.isAfter(endDate) ? endDate : proposedEnd;
 
       final result = await _fetchDailyRollup(
@@ -465,14 +471,19 @@ class HealthService {
       final endDateKey = _formatDateKey(end);
       filter = '$filterType.date >= "$startDateKey" '
           'AND $filterType.date < "$endDateKey"';
+    } else if (dataType == 'sleep') {
+      // Sleep is a session data type. Google Health does not allow
+      // sleep.interval.start_time in list filters; use civil_end_time.
+      final startDateKey = _formatDateKey(start);
+      final endDateKey = _formatDateKey(end);
+      filter = 'sleep.interval.civil_end_time >= "$startDateKey" '
+          'AND sleep.interval.civil_end_time < "$endDateKey"';
     } else if (dataType == 'steps' ||
         dataType == 'active-zone-minutes' ||
         dataType == 'distance' ||
-        dataType == 'total-calories' ||
         dataType == 'active-energy-burned' ||
         dataType == 'active-minutes' ||
-        dataType == 'floors' ||
-        dataType == 'sleep') {
+        dataType == 'floors') {
       filter = '$filterType.interval.start_time >= "$startIso" '
           'AND $filterType.interval.start_time < "$endIso"';
     } else if (dataType == 'core-body-temperature') {
@@ -490,7 +501,7 @@ class HealthService {
       do {
         final query = <String, String>{
           'filter': filter,
-          'page_size': '1000',
+          'page_size': dataType == 'sleep' ? '25' : '1000',
         };
         if (pageToken != null && pageToken.isNotEmpty) {
           query['page_token'] = pageToken;
@@ -537,13 +548,17 @@ class HealthService {
   // ---------------------------------------------------------------------------
 
   static Future<Map<String, dynamic>> getTodayHealthData() async {
-    final history = await getAllHealthHistory(daysBack: 30);
-    final records = history['records'];
-    if (records is List && records.isNotEmpty) {
-      return Map<String, dynamic>.from(records.first as Map);
+    // Legacy callers must use the local cache. Do not hit Google Health just
+    // because an older screen asks for today's data. The sync engine is the
+    // only code path that should query Google Health.
+    final records = await getLocalHealthHistory();
+    if (records.isNotEmpty) {
+      records.sort((a, b) =>
+          (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
+      return Map<String, dynamic>.from(records.first);
     }
     return {
-      'source': history['source'] ?? 'Disconnected',
+      'source': 'Pulse AI local app cache',
       'platform': _platformName,
     };
   }
@@ -674,7 +689,15 @@ class HealthService {
     final points = snapshot['syncPoints'] is Map
         ? Map<String, dynamic>.from(snapshot['syncPoints'])
         : <String, dynamic>{};
-    if (points['lastFullSyncAt'] == null) return true;
+    // Existing Mongo records are already a valid baseline even if the
+    // sync-point document is missing (migration/older app version).
+    final records = snapshot['records'];
+    final hasBaseline =
+        points['lastFullSyncAt'] != null ||
+        (records is List && records.isNotEmpty);
+
+    if (!hasBaseline) return true;
+
     return _isDue(points['lastDailySyncAt'], const Duration(days: 1)) ||
         _isDue(points['lastWeeklySyncAt'], const Duration(days: 7)) ||
         _isDue(points['lastMonthlySyncAt'], const Duration(days: 30));
@@ -695,8 +718,16 @@ class HealthService {
         ? snapshot['records'].whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
         : <Map<String, dynamic>>[];
 
-    final hasFull = serverPoints['lastFullSyncAt'] != null;
-    final dailyDue = force || _isDue(serverPoints['lastDailySyncAt'], const Duration(days: 1));
+    // MongoDB is the source of truth. If Mongo already contains health
+    // records, treat that dataset as the established baseline even if an
+    // older app version did not create a HealthSyncPoint document.
+    // This prevents an unnecessary multi-year Google Health download.
+    final hasMongoBaseline = localRecords.isNotEmpty;
+    final hasFull =
+        serverPoints['lastFullSyncAt'] != null || hasMongoBaseline;
+
+    final dailyDue =
+        force || _isDue(serverPoints['lastDailySyncAt'], const Duration(days: 1));
     final weeklyDue = force || _isDue(serverPoints['lastWeeklySyncAt'], const Duration(days: 7));
     final monthlyDue = force || _isDue(serverPoints['lastMonthlySyncAt'], const Duration(days: 30));
 
@@ -757,6 +788,13 @@ class HealthService {
 
     final now = DateTime.now().toUtc().toIso8601String();
     final points = <String, dynamic>{...serverPoints};
+
+    // Migration case: Mongo already contains records but the sync-point
+    // document is missing. Establish the sync baseline without a full import.
+    if (hasMongoBaseline && points['lastFullSyncAt'] == null) {
+      points['lastFullSyncAt'] = now;
+    }
+
     points['lastDailySyncAt'] = now;
     if (!hasFull) points['lastFullSyncAt'] = now;
     if (weeklyDue || !hasFull) points['lastWeeklySyncAt'] = now;
@@ -821,6 +859,23 @@ class HealthService {
     await prefs.remove(_localSyncPointsKey);
   }
 
+  static String? _dateKeyFromRollup(Map<String, dynamic> point) {
+    final raw = point['startTime'] ?? point['civilStartTime'] ?? point['date'];
+    if (raw is String && raw.isNotEmpty) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return _formatDateKey(parsed.toUtc());
+    }
+    if (raw is Map<String, dynamic>) {
+      final y = _toInt(raw['year']);
+      final m = _toInt(raw['month']);
+      final d = _toInt(raw['day']);
+      if (y > 0 && m > 0 && d > 0) {
+        return _formatDateKey(DateTime.utc(y, m, d));
+      }
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // Get ALL-TIME Health History (day-by-day records)
   // ---------------------------------------------------------------------------
@@ -867,7 +922,7 @@ class HealthService {
     final results = await Future.wait([
       _fetchDataPoints('steps', startDate: start, endDate: end),
       _fetchDataPoints('distance', startDate: start, endDate: end),
-      _fetchDataPoints('total-calories', startDate: start, endDate: end),
+      _fetchDailyRollupChunked('total-calories', startDate: start, endDate: end, maxChunkDays: 13),
       _fetchDataPoints('active-minutes', startDate: start, endDate: end),
       _fetchDailyRollupChunked('floors', startDate: start, endDate: end),
       _fetchDataPoints('heart-rate', startDate: start, endDate: end),
@@ -934,22 +989,21 @@ class HealthService {
       }
     }
 
-    // Total calories — sum kcal per day.
-    final caloriePoints = results[2]?['dataPoints'];
-    if (caloriePoints is List) {
-      for (final raw in caloriePoints) {
+    // Total calories — Google Health supports rollup/dailyRollup only.
+    // Do NOT call the list endpoint for total-calories (it returns HTTP 400).
+    final calorieRows = results[2]?['rollupDataPoints'];
+    if (calorieRows is List) {
+      for (final raw in calorieRows) {
         if (raw is! Map<String, dynamic>) continue;
-        final dateKey = _dateKeyFromPoint(raw, 'totalCalories');
+        final dateKey = _dateKeyFromPoint(raw, 'totalCalories') ??
+            _dateKeyFromRollup(raw);
         if (dateKey == null) continue;
         final kcal = _toDouble(
-          raw['totalCalories']?['kcal'] ??
-              raw['totalCalories']?['calories'] ??
-              raw['totalCalories']?['kilocalories'],
+          raw['totalCalories']?['kcalSum'] ??
+              raw['totalCalories']?['kcal'] ??
+              raw['totalCalories']?['calories'],
         );
-        if (kcal > 0) {
-          bucket(dateKey)['calories'] =
-              _toDouble(bucket(dateKey)['calories']) + kcal;
-        }
+        if (kcal > 0) bucket(dateKey)['calories'] = kcal;
       }
     }
 
@@ -1161,6 +1215,17 @@ class HealthService {
       'totalDaysWithData': records.length,
       'fetchedAt': DateTime.now().toUtc().toIso8601String(),
     };
+  }
+
+  /// Returns the latest saved daily resting heart rate in BPM.
+  /// This reads the app cache first and never triggers a Google Health fetch.
+  static Future<double?> getLatestRestingHeartRate() async {
+    final records = await getLocalHealthHistory();
+    for (final record in records) {
+      final value = _toDouble(record['restingHeartRate']);
+      if (value > 0) return value;
+    }
+    return null;
   }
 
   /// Persists the complete Google Health history to MongoDB.

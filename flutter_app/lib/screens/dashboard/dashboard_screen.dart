@@ -12,6 +12,7 @@ import 'ai_chat_screen.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/services/auth_manager.dart';
 import '../../core/services/health_service.dart';
+import '../../core/services/health_background_sync.dart';
 
 import '../auth/welcome_screen.dart';
 import '../../features/cv/cv_analysis_screen.dart';
@@ -37,7 +38,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState
-    extends State<DashboardScreen> {
+    extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   // ===========================================================================
   // DASHBOARD STATE
   // ===========================================================================
@@ -68,6 +70,8 @@ class _DashboardScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _initializeHealthAndDashboard();
 
     // Sync checks are now hourly, not every five minutes. The check first
@@ -83,6 +87,12 @@ class _DashboardScreenState
     await HealthService.initialize();
     await loadDashboard();
     await _maybeAutomaticHealthSync();
+
+    // Once MongoDB already has a baseline, keep the recurring worker enabled
+    // across future app launches.
+    if (HealthService.isConnected) {
+      await HealthBackgroundSync.ensureScheduled();
+    }
   }
 
   Future<void> _maybeAutomaticHealthSync() async {
@@ -104,7 +114,17 @@ class _DashboardScreenState
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // When the user returns to the app, immediately perform the due check
+      // instead of waiting for the hourly timer.
+      _maybeAutomaticHealthSync();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _healthRefreshTimer?.cancel();
 
     super.dispose();
@@ -257,7 +277,7 @@ class _DashboardScreenState
     if (token == null || token.isEmpty) return;
 
     setState(() => isSyncing = true);
-    await Navigator.of(context).push(
+    final syncResult = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => HealthSyncScreen(
@@ -268,6 +288,13 @@ class _DashboardScreenState
     );
     if (!mounted) return;
     setState(() => isSyncing = false);
+
+    // Only enable the recurring worker after the sync screen reports a
+    // successful sync result. A cancelled/failed sync does not activate it.
+    if (syncResult != null) {
+      await HealthBackgroundSync.ensureScheduled();
+    }
+
     await loadHealthOverview();
   }
 
@@ -1902,18 +1929,28 @@ class _DashboardScreenState
 
                 unit:
                     "steps",
+              ),              _buildHealthMetric(
+                icon: Icons
+                    .favorite_rounded,
+                title:
+                    "Heart Rate",
+                value:
+                    _toInt(record["heartRate"]) > 0
+                        ? "${_toInt(record["heartRate"])}"
+                        : "—",
+                unit:
+                    "BPM",
               ),
 
               _buildHealthMetric(
                 icon: Icons
-                    .favorite_rounded,
-
+                    .favorite_border_rounded,
                 title:
-                    "Heart Rate",
-
+                    "Resting Heart",
                 value:
-                    "${_toInt(record["heartRate"])}",
-
+                    _toInt(record["restingHeartRate"]) > 0
+                        ? "${_toInt(record["restingHeartRate"])}"
+                        : "—",
                 unit:
                     "BPM",
               ),
@@ -2234,12 +2271,22 @@ class _DashboardScreenState
 
           color:
               Colors.redAccent,
+        ),        _buildAverageMetric(
+          icon: Icons.favorite_border_rounded,
+          title:
+              "Average Resting Heart Rate",
+          value:
+              _average("restingHeartRate")
+                  .toStringAsFixed(1),
+          unit:
+              "BPM",
+          color:
+              Colors.pinkAccent,
         ),
 
         _buildAverageMetric(
           icon:
               Icons.stairs_rounded,
-
           title:
               "Average Stairs",
 
