@@ -18,6 +18,10 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 
 
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
 DATASET = (
     "../data/processed/"
     "cardio_clean_common.csv"
@@ -31,62 +35,177 @@ os.makedirs(
 )
 
 
-FEATURES = [
-    # ---------------------------------------------------------
-    # Profile
-    # ---------------------------------------------------------
+# ============================================================================
+# FEATURES
+# ============================================================================
+#
+# Pulse AI Advanced v1
+#
+# Profile:
+#   age
+#   sex
+#   height
+#   weight
+#   BMI
+#
+# Lifestyle:
+#   smoking
+#   alcohol
+#   activity
+#
+# Clinical:
+#   systolic BP
+#   diastolic BP
+#   cholesterol
+#
+# Intentionally excluded:
+#   glucose
+#   HbA1c
+#   LDL
+#   HDL
+#   triglycerides
+# ============================================================================
 
+FEATURES = [
+    # Profile
     "age_years",
     "sex",
     "height",
     "weight",
     "bmi",
 
-    # ---------------------------------------------------------
     # Lifestyle
-    # ---------------------------------------------------------
-
     "smoke",
     "alco",
     "active",
 
-    # ---------------------------------------------------------
     # Clinical
-    # ---------------------------------------------------------
-
     "ap_hi",
     "ap_lo",
     "cholesterol",
 ]
 
 
+TARGET = "cardio"
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
 def main():
+
+    print("=" * 70)
+    print("PULSE AI ADVANCED — TRAINING")
+    print("=" * 70)
+
+    # ------------------------------------------------------------------------
+    # LOAD DATA
+    # ------------------------------------------------------------------------
 
     df = pd.read_csv(
         DATASET
     )
+
+    print(
+        f"\nTotal records: {len(df)}"
+    )
+
+    # ------------------------------------------------------------------------
+    # FEATURES + TARGET
+    # ------------------------------------------------------------------------
 
     X = df[
         FEATURES
     ]
 
     y = df[
-        "cardio"
+        TARGET
     ]
 
-    X_train, X_test, y_train, y_test = (
-        train_test_split(
-            X,
-            y,
-            test_size=0.20,
-            random_state=42,
-            stratify=y,
-        )
+    print(
+        f"Features: {len(FEATURES)}"
     )
 
-    # =========================================================
+    print(
+        "\nFeatures used:"
+    )
+
+    for feature in FEATURES:
+        print(
+            f"  - {feature}"
+        )
+
+    # =========================================================================
+    # DATA SPLITTING
+    # =========================================================================
+    #
+    # 70% Training
+    # 10% Validation
+    # 20% Final Test
+    #
+    # The final test set will NOT be used for threshold selection.
+    # =========================================================================
+
+    # ------------------------------------------------------------------------
+    # FIRST SPLIT
+    #
+    # 80% development
+    # 20% final test
+    # ------------------------------------------------------------------------
+
+    X_dev, X_test, y_dev, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.20,
+        random_state=42,
+        stratify=y,
+    )
+
+    # ------------------------------------------------------------------------
+    # SECOND SPLIT
+    #
+    # Development:
+    #
+    # 80% of 80% = 64% overall training
+    # 20% of 80% = 16% overall validation
+    #
+    # Therefore:
+    #
+    # Training   = 64%
+    # Validation = 16%
+    # Test       = 20%
+    # ------------------------------------------------------------------------
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_dev,
+        y_dev,
+        test_size=0.20,
+        random_state=42,
+        stratify=y_dev,
+    )
+
+    print("\n" + "=" * 70)
+    print("DATA SPLIT")
+    print("=" * 70)
+
+    print(
+        f"Training samples   : {len(X_train)}"
+    )
+
+    print(
+        f"Validation samples : {len(X_val)}"
+    )
+
+    print(
+        f"Testing samples    : {len(X_test)}"
+    )
+
+    # =========================================================================
     # LOGISTIC REGRESSION
-    # =========================================================
+    # =========================================================================
+
+    print("\nTraining Logistic Regression...")
 
     logistic = Pipeline(
         [
@@ -96,10 +215,12 @@ def main():
                     strategy="median"
                 ),
             ),
+
             (
                 "scaler",
                 StandardScaler(),
             ),
+
             (
                 "model",
                 LogisticRegression(
@@ -119,9 +240,17 @@ def main():
         f"{MODEL_DIR}/logistic.pkl",
     )
 
-    # =========================================================
+    print(
+        "Logistic Regression saved."
+    )
+
+    # =========================================================================
     # RANDOM FOREST
-    # =========================================================
+    # =========================================================================
+
+    print(
+        "\nTraining Random Forest..."
+    )
 
     random_forest = Pipeline(
         [
@@ -131,6 +260,7 @@ def main():
                     strategy="median"
                 ),
             ),
+
             (
                 "model",
                 RandomForestClassifier(
@@ -155,9 +285,17 @@ def main():
         f"{MODEL_DIR}/random_forest.pkl",
     )
 
-    # =========================================================
+    print(
+        "Random Forest saved."
+    )
+
+    # =========================================================================
     # XGBOOST
-    # =========================================================
+    # =========================================================================
+
+    print(
+        "\nTraining XGBoost..."
+    )
 
     xgb = XGBClassifier(
         n_estimators=400,
@@ -180,27 +318,93 @@ def main():
         f"{MODEL_DIR}/xgboost.pkl",
     )
 
-    test = X_test.copy()
+    print(
+        "XGBoost saved."
+    )
 
-    test["cardio"] = y_test
+    # =========================================================================
+    # SAVE TRAINING / VALIDATION / TEST DATA
+    # =========================================================================
 
-    test.to_csv(
+    train_data = X_train.copy()
+
+    train_data[TARGET] = y_train
+
+    train_data.to_csv(
+        f"{MODEL_DIR}/train.csv",
+        index=False,
+    )
+
+    validation_data = X_val.copy()
+
+    validation_data[TARGET] = y_val
+
+    validation_data.to_csv(
+        f"{MODEL_DIR}/validation.csv",
+        index=False,
+    )
+
+    test_data = X_test.copy()
+
+    test_data[TARGET] = y_test
+
+    test_data.to_csv(
         f"{MODEL_DIR}/test.csv",
         index=False,
     )
 
-    print("=" * 70)
-    print("PULSE AI ADVANCED TRAINING COMPLETE")
+    # =========================================================================
+    # SUMMARY
+    # =========================================================================
+
+    print("\n" + "=" * 70)
+    print(
+        "PULSE AI ADVANCED TRAINING COMPLETE"
+    )
     print("=" * 70)
 
     print(
-        f"Training samples: {len(X_train)}"
+        f"Training samples   : {len(X_train)}"
     )
 
     print(
-        f"Testing samples: {len(X_test)}"
+        f"Validation samples : {len(X_val)}"
     )
 
+    print(
+        f"Testing samples    : {len(X_test)}"
+    )
+
+    print(
+        "\nModels saved to:"
+    )
+
+    print(
+        os.path.abspath(
+            MODEL_DIR
+        )
+    )
+
+    print(
+        "\nSaved datasets:"
+    )
+
+    print(
+        "  - train.csv"
+    )
+
+    print(
+        "  - validation.csv"
+    )
+
+    print(
+        "  - test.csv"
+    )
+
+
+# ============================================================================
+# ENTRY POINT
+# ============================================================================
 
 if __name__ == "__main__":
     main()
