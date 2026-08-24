@@ -4,13 +4,11 @@ import numpy as np
 import pandas as pd
 
 
-RAW_FILE = (
-    "../data/raw/cardio_train.csv"
-)
+RAW_FILE = "../data/raw/cardio_train.csv"
 
 OUTPUT_FILE = (
     "../data/processed/"
-    "cardio_v1_clean.csv"
+    "cardio_clean_common.csv"
 )
 
 
@@ -25,16 +23,19 @@ def main():
 
     df = pd.read_csv(
         RAW_FILE,
-        sep=";"
+        sep=";",
     )
 
+    print("=" * 70)
+    print("PULSE AI — COMMON DATA PREPROCESSING")
+    print("=" * 70)
+
     print(
-        f"Original records: "
-        f"{len(df)}"
+        f"Original records: {len(df)}"
     )
 
     # =========================================================
-    # REMOVE IDENTIFIER
+    # REMOVE ONLY THE IDENTIFIER
     # =========================================================
 
     df = df.drop(
@@ -46,19 +47,21 @@ def main():
     # AGE
     # =========================================================
 
-    # Dataset stores age in days.
     df["age_years"] = (
         df["age"] / 365.25
     )
 
-    df["age_years"] = (
-        df["age_years"]
-        .round(1)
-    )
+    # =========================================================
+    # SEX
+    # =========================================================
 
-    df = df.drop(
-        columns=["age"]
-    )
+    # Original:
+    # 1 = female
+    # 2 = male
+
+    df["sex"] = (
+        df["gender"] == 2
+    ).astype(int)
 
     # =========================================================
     # BMI
@@ -74,57 +77,78 @@ def main():
     )
 
     # =========================================================
-    # BASIC RANGE FILTERS
+    # BASIC VALIDATION
     # =========================================================
 
-    df = df[
-        df["age_years"].between(
+    df.loc[
+        ~df["age_years"].between(
             18,
             100,
-        )
-    ]
+        ),
+        "age_years",
+    ] = np.nan
 
-    df = df[
-        df["height"].between(
+    df.loc[
+        ~df["height"].between(
             120,
             220,
-        )
-    ]
+        ),
+        "height",
+    ] = np.nan
 
-    df = df[
-        df["weight"].between(
+    df.loc[
+        ~df["weight"].between(
             30,
             250,
-        )
-    ]
+        ),
+        "weight",
+    ] = np.nan
 
-    df = df[
-        df["bmi"].between(
+    df.loc[
+        ~df["bmi"].between(
             10,
             70,
-        )
-    ]
+        ),
+        "bmi",
+    ] = np.nan
 
     # =========================================================
-    # BINARY FEATURES
+    # BLOOD PRESSURE
     # =========================================================
 
-    # Dataset:
-    # gender: 1 = female, 2 = male
+    # We will use these in Advanced.
     #
-    # Convert to:
-    # sex: 0 = female, 1 = male
+    # We intentionally DO NOT use glucose.
 
-    df["sex"] = (
-        df["gender"] == 2
-    ).astype(int)
+    df.loc[
+        ~df["ap_hi"].between(
+            70,
+            250,
+        ),
+        "ap_hi",
+    ] = np.nan
 
-    df = df.drop(
-        columns=["gender"]
-    )
+    df.loc[
+        ~df["ap_lo"].between(
+            40,
+            150,
+        ),
+        "ap_lo",
+    ] = np.nan
 
     # =========================================================
-    # KEEP ONLY V1 FEATURES
+    # CHOLESTEROL
+    # =========================================================
+
+    df.loc[
+        ~df["cholesterol"].isin(
+            [1, 2, 3]
+        ),
+        "cholesterol",
+    ] = np.nan
+
+    # =========================================================
+    # KEEP COMMON + ADVANCED FIELDS
     # =========================================================
 
     columns = [
@@ -133,9 +157,15 @@ def main():
         "height",
         "weight",
         "bmi",
+
         "smoke",
         "alco",
         "active",
+
+        "ap_hi",
+        "ap_lo",
+        "cholesterol",
+
         "cardio",
     ]
 
@@ -144,30 +174,13 @@ def main():
     ]
 
     # =========================================================
-    # MISSING VALUES
+    # MISSING DATA REPORT
     # =========================================================
 
-    print(
-        "\nMissing values:"
-    )
+    print("\nMissing values:")
 
     print(
         df.isnull().sum()
-    )
-
-    df = df.dropna()
-
-    # =========================================================
-    # DUPLICATES
-    # =========================================================
-
-    before = len(df)
-
-    df = df.drop_duplicates()
-
-    print(
-        f"\nDuplicates removed: "
-        f"{before - len(df)}"
     )
 
     # =========================================================
@@ -180,13 +193,11 @@ def main():
     )
 
     print(
-        f"\nClean records: "
-        f"{len(df)}"
+        f"\nClean records: {len(df)}"
     )
 
     print(
-        f"Saved to: "
-        f"{OUTPUT_FILE}"
+        f"Saved to: {OUTPUT_FILE}"
     )
 
     print(
