@@ -8,7 +8,7 @@ import 'record_health_screen.dart';
 import 'health_averages_screen.dart';
 import 'health_sync_screen.dart';
 import 'ai_chat_screen.dart';
-
+import '../commons/sidebar.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/services/auth_manager.dart';
 import '../../core/services/health_service.dart';
@@ -711,11 +711,20 @@ class _DashboardScreenState
       backgroundColor:
           const Color(0xfff4f7f6),
 
-      drawer: _buildHealthSidebar(
-        user: user,
-        profile: profile,
-        healthConnected: healthConnected,
-      ),
+    drawer: HealthSidebar(
+      user: user,
+      profile: profile,
+      healthConnected: healthConnected,
+      onDashboard: () {
+    // Already on dashboard.
+  },
+
+  onAllHealthHistory: _openAllRecords,
+
+  onSyncHealth: _refreshAll,
+
+  onLogout: _handleLogout,
+),
 
       // =======================================================================
       // BOTH FLOATING BUTTONS
@@ -2606,178 +2615,6 @@ class _DashboardScreenState
     );
   }
 
-  Widget _buildHealthSidebar({
-    required Map<String, dynamic> user,
-    required Map<String, dynamic> profile,
-    required bool healthConnected,
-  }) {
-    final name = user["name"]?.toString() ?? "User";
-    final email = user["email"]?.toString() ?? "";
-
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xff6c5ce7),
-                    Color(0xff9f6eff),
-                  ],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CircleAvatar(
-                    radius: 27,
-                    backgroundColor: Colors.white24,
-                    child: Icon(
-                      Icons.health_and_safety_rounded,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  if (email.isNotEmpty)
-                    Text(
-                      email,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                      ),
-                    ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(
-                        healthConnected
-                            ? Icons.cloud_done_rounded
-                            : Icons.cloud_off_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        healthConnected
-                            ? "Google Health connected"
-                            : "Google Health not connected",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            _sidebarItem(
-              icon: Icons.dashboard_rounded,
-              title: "Dashboard",
-              onTap: () => Navigator.pop(context),
-            ),
-            _sidebarItem(
-              icon: Icons.history_rounded,
-              title: "All Health History",
-              subtitle: "Every available recorded day",
-              onTap: () {
-                Navigator.pop(context);
-                _openAllRecords();
-              },
-            ),
-            _sidebarItem(
-              icon: Icons.insights_rounded,
-              title: "Weekly & Monthly Averages",
-              subtitle: "Trends from the first available entry",
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const HealthAveragesScreen(),
-                  ),
-                );
-              },
-            ),
-            _sidebarItem(
-              icon: Icons.monitor_heart_rounded,
-              title: "Resting BPM",
-              subtitle: "Daily resting heart-rate history",
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const HealthAveragesScreen(
-                      initialMetric: "restingHeartRate",
-                    ),
-                  ),
-                );
-              },
-            ),
-            const Divider(height: 24),
-            _sidebarItem(
-              icon: Icons.refresh_rounded,
-              title: "Sync Google Health",
-              subtitle: "Refresh all available history",
-              onTap: () {
-                Navigator.pop(context);
-                _refreshAll();
-              },
-            ),
-            _sidebarItem(
-              icon: Icons.logout_rounded,
-              title: "Logout",
-              color: Colors.redAccent,
-              onTap: _handleLogout,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sidebarItem({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required VoidCallback onTap,
-    Color color = const Color(0xff374151),
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-          color: color,
-        ),
-      ),
-      subtitle: subtitle == null
-          ? null
-          : Text(
-              subtitle,
-              style: const TextStyle(fontSize: 10),
-            ),
-      onTap: onTap,
-    );
-  }
 
   // ===========================================================================
   // FLOATING COMPUTER VISION BUTTON

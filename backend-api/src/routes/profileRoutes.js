@@ -1,29 +1,51 @@
-// routes/profileRoutes.js
-
 const express = require("express");
 const router = express.Router();
 
 const auth = require("../middleware/userAuth");
 
-// Profile controller
 const {
   createProfile,
   getUserProfile,
   updateProfile,
 } = require("../controllers/userProfileController");
 
-// Dashboard controller (NEW FILE)
 const {
   getDashboard,
 } = require("../controllers/dashboardController");
 
-router.post("/create", auth, createProfile);
+// ============================================================================
+// USER PROFILE
+// ============================================================================
 
-router.get("/me", auth, getUserProfile);
+// Create profile
+router.post(
+  "/create",
+  auth,
+  createProfile
+);
 
-router.put("/update", auth, updateProfile);
+// Get currently authenticated user's profile
+router.get(
+  "/me",
+  auth,
+  getUserProfile
+);
 
-// Dashboard route (now cleanly separated)
-router.get("/dashboard", auth, getDashboard);
+// Update currently authenticated user's profile
+router.put(
+  "/update",
+  auth,
+  updateProfile
+);
+
+// ============================================================================
+// USER DASHBOARD
+// ============================================================================
+
+router.get(
+  "/dashboard",
+  auth,
+  getDashboard
+);
 
 module.exports = router;
