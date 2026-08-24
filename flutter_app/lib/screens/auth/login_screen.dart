@@ -7,7 +7,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/google_auth_service.dart';
 
 import '../dashboard/dashboard_screen.dart';
-import '../onboarding/profile_setup_screen.dart';
+import '../onboarding&account/profile_setup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({

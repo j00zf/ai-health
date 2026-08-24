@@ -5,7 +5,6 @@ import 'package:dio/dio.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'record_health_screen.dart';
-import 'health_averages_screen.dart';
 import 'health_sync_screen.dart';
 import 'ai_chat_screen.dart';
 import '../commons/sidebar.dart';
@@ -13,7 +12,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/services/auth_manager.dart';
 import '../../core/services/health_service.dart';
 import '../../core/services/health_background_sync.dart';
-
+import '../onboarding&account/user_account_screen.dart';
 import '../auth/welcome_screen.dart';
 import '../../features/cv/cv_analysis_screen.dart';
 
@@ -495,6 +494,35 @@ class _DashboardScreenState
   }
 
   // ===========================================================================
+  // OPEN USER ACCOUNT / PROFILE
+  // ===========================================================================
+
+  Future<void> _openUserAccount(
+    Map<String, dynamic> user,
+    Map<String, dynamic> profile,
+  ) async {
+    if (!mounted) return;
+
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => UserAccountScreen(
+          user: user,
+          profile: profile,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    // UserAccountScreen returns true after a successful profile update.
+    // Reload the dashboard so the updated profile information is shown
+    // immediately without requiring the user to restart the app.
+    if (updated == true) {
+      await loadDashboard();
+    }
+  }
+
+  // ===========================================================================
   // NUMBER HELPERS
   // ===========================================================================
 
@@ -712,11 +740,17 @@ class _DashboardScreenState
           const Color(0xfff4f7f6),
 
     drawer: HealthSidebar(
-      user: user,
-      profile: profile,
-      healthConnected: healthConnected,
-      onDashboard: () {
-    // Already on dashboard.
+  user: user,
+  profile: profile,
+  healthConnected: healthConnected,
+
+  onDashboard: () {},
+
+  onAccount: () {
+    _openUserAccount(
+      user,
+      profile,
+    );
   },
 
   onAllHealthHistory: _openAllRecords,
@@ -725,7 +759,6 @@ class _DashboardScreenState
 
   onLogout: _handleLogout,
 ),
-
       // =======================================================================
       // BOTH FLOATING BUTTONS
       // =======================================================================

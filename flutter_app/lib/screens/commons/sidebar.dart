@@ -12,6 +12,7 @@ class HealthSidebar extends StatelessWidget {
   final bool healthConnected;
 
   final VoidCallback onDashboard;
+  final VoidCallback onAccount;
   final VoidCallback onAllHealthHistory;
   final VoidCallback onSyncHealth;
   final VoidCallback onLogout;
@@ -22,6 +23,7 @@ class HealthSidebar extends StatelessWidget {
     required this.profile,
     required this.healthConnected,
     required this.onDashboard,
+    required this.onAccount,
     required this.onAllHealthHistory,
     required this.onSyncHealth,
     required this.onLogout,
@@ -136,6 +138,19 @@ class HealthSidebar extends StatelessWidget {
               onTap: () {
                 Navigator.pop(context);
                 onDashboard();
+              },
+            ),
+
+            // ===============================================================
+            // MY PROFILE
+            // ===============================================================
+            _sidebarItem(
+              icon: Icons.person_outline_rounded,
+              title: "My Profile",
+              subtitle: "Manage your personal & health details",
+              onTap: () {
+                Navigator.pop(context);
+                onAccount();
               },
             ),
 
@@ -266,7 +281,6 @@ class HealthSidebar extends StatelessWidget {
         horizontal: 20,
         vertical: 2,
       ),
-
       leading: Container(
         width: 38,
         height: 38,
@@ -280,7 +294,6 @@ class HealthSidebar extends StatelessWidget {
           size: 20,
         ),
       ),
-
       title: Text(
         title,
         style: TextStyle(
@@ -289,7 +302,6 @@ class HealthSidebar extends StatelessWidget {
           color: color,
         ),
       ),
-
       subtitle: subtitle == null
           ? null
           : Text(
@@ -301,13 +313,11 @@ class HealthSidebar extends StatelessWidget {
                 color: Colors.black45,
               ),
             ),
-
       trailing: const Icon(
         Icons.chevron_right_rounded,
         size: 18,
         color: Colors.black26,
       ),
-
       onTap: onTap,
     );
   }
