@@ -31,7 +31,7 @@ const dashboardRoutes = require("./routes/dashboard_routes"); // ← fixed: was 
 const deviceRoutes = require("./routes/deviceRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const cvRoutes = require("./routes/cvRoutes");
-// health-record CRUD, including the paginated /all and delete endpoints that
+const mlHealthRoutes =  require("./routes/mlHealthRoutes" );
 // used to live under /api/records)
 
 // Database
@@ -63,7 +63,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/device", deviceRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/cv", cvRoutes);
-
+app.use("/api/v1/ml-health",mlHealthRoutes);
 
 
 // Server
