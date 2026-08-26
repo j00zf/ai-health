@@ -9,38 +9,27 @@ def main():
 
     profile = {
 
-        "age":
-            25,
+        "age": 25,
 
-        "sex":
-            1,
+        "sex": 1,
 
-        "height_cm":
-            175,
+        "height_cm": 175,
 
-        "weight_kg":
-            70,
+        "weight_kg": 70,
 
-        "bmi":
-            22.86,
+        "bmi": 22.86,
 
-        "waist_cm":
-            80,
+        "waist_cm": 80,
 
-        "heart_rate":
-            72,
+        "heart_rate": 72,
 
-        "activity_minutes":
-            180,
+        "activity_minutes": 180,
 
-        "sleep_hours":
-            7.5,
+        "sleep_hours": 7.5,
 
-        "smoking":
-            0,
+        "smoking": 0,
 
-        "alcohol":
-            0,
+        "alcohol": 0,
     }
 
 
@@ -48,119 +37,173 @@ def main():
     # SAMPLE LONGITUDINAL HEALTH DATA
     # ========================================================
 
-    health_records = [
-
-        {
-            "date": "2026-08-01",
-
-            "steps": 6000,
-
-            "activeHours": 1.4,
-
-            "activeZoneMinutes": 35,
-
-            "heartRate": 75,
-
-            "restingHeartRate": 68,
-
-            "sleep": 6.8,
-
-            "weight": 70.5,
-
-            "bmi": 23.0,
-
-            "oxygenSaturation": 97,
-
-            "calories": 2100,
-
-            "distance": 4.2,
-        },
-
-
-        {
-            "date": "2026-08-08",
-
-            "steps": 6800,
-
-            "activeHours": 1.5,
-
-            "activeZoneMinutes": 40,
-
-            "heartRate": 74,
-
-            "restingHeartRate": 67,
-
-            "sleep": 7.1,
-
-            "weight": 70.2,
-
-            "bmi": 22.9,
-
-            "oxygenSaturation": 98,
-
-            "calories": 2150,
-
-            "distance": 4.6,
-        },
-
-
-        {
-            "date": "2026-08-15",
-
-            "steps": 7500,
-
-            "activeHours": 1.7,
-
-            "activeZoneMinutes": 48,
-
-            "heartRate": 73,
-
-            "restingHeartRate": 65,
-
-            "sleep": 7.5,
-
-            "weight": 70.0,
-
-            "bmi": 22.86,
-
-            "oxygenSaturation": 98,
-
-            "calories": 2200,
-
-            "distance": 5.1,
-        },
-
-
-        {
-            "date": "2026-08-22",
-
-            "steps": 8100,
-
-            "activeHours": 1.9,
-
-            "activeZoneMinutes": 55,
-
-            "heartRate": 72,
-
-            "restingHeartRate": 64,
-
-            "sleep": 7.8,
-
-            "weight": 69.8,
-
-            "bmi": 22.8,
-
-            "oxygenSaturation": 98,
-
-            "calories": 2250,
-
-            "distance": 5.6,
-        },
-    ]
+    health_records = []
 
 
     # ========================================================
-    # ANALYZE
+    # CREATE 30 DAYS OF SAMPLE DATA
+    # ========================================================
+
+    for day in range(1, 31):
+
+        progress = day / 30.0
+
+
+        # ----------------------------------------------------
+        # Activity gradually improves
+        # ----------------------------------------------------
+
+        steps = (
+            5500
+            +
+            int(
+                3000 * progress
+            )
+        )
+
+
+        active_zone = (
+            30
+            +
+            int(
+                30 * progress
+            )
+        )
+
+
+        active_hours = (
+            1.2
+            +
+            (
+                0.8 * progress
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # Sleep gradually improves
+        # ----------------------------------------------------
+
+        sleep = (
+            6.7
+            +
+            (
+                1.0 * progress
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # Resting HR gradually decreases
+        # ----------------------------------------------------
+
+        resting_hr = (
+            69
+            -
+            (
+                5 * progress
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # Heart rate remains stable
+        # ----------------------------------------------------
+
+        heart_rate = 73
+
+
+        # ----------------------------------------------------
+        # Weight remains relatively stable
+        # ----------------------------------------------------
+
+        weight = (
+            70.5
+            -
+            (
+                0.5 * progress
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # BMI remains relatively stable
+        # ----------------------------------------------------
+
+        bmi = (
+            22.95
+            -
+            (
+                0.15 * progress
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # Add daily record
+        # ----------------------------------------------------
+
+        health_records.append({
+
+            "date":
+                f"2026-08-{day:02d}",
+
+            "steps":
+                steps,
+
+            "activeHours":
+                round(
+                    active_hours,
+                    2
+                ),
+
+            "activeZoneMinutes":
+                active_zone,
+
+            "heartRate":
+                heart_rate,
+
+            "restingHeartRate":
+                round(
+                    resting_hr,
+                    2
+                ),
+
+            "sleep":
+                round(
+                    sleep,
+                    2
+                ),
+
+            "weight":
+                round(
+                    weight,
+                    2
+                ),
+
+            "bmi":
+                round(
+                    bmi,
+                    2
+                ),
+
+            "oxygenSaturation":
+                98,
+
+            "calories":
+                2200 + (
+                    day * 5
+                ),
+
+            "distance":
+                4.5 + (
+                    day * 0.04
+                ),
+        })
+
+
+    # ========================================================
+    # ANALYZE USER
     # ========================================================
 
     result = analyze_user(
@@ -172,12 +215,13 @@ def main():
 
 
     # ========================================================
-    # DISPLAY
+    # DISPLAY HEADER
     # ========================================================
 
+    print()
+
     print(
-        "\n"
-        + "=" * 70
+        "=" * 70
     )
 
     print(
@@ -189,10 +233,15 @@ def main():
     )
 
 
-    print(
-        "\nSCORES"
-    )
+    # ========================================================
+    # SCORES
+    # ========================================================
 
+    print()
+
+    print(
+        "SCORES"
+    )
 
     print(
         "-" * 70
@@ -204,56 +253,19 @@ def main():
     ):
 
         print(
-            f"{key:30} : {value}"
+            f"{key:35} : {value}"
         )
 
 
-    print(
-        "\nPERSONAL WELLNESS"
-    )
+    # ========================================================
+    # MODEL PROBABILITIES
+    # ========================================================
 
-
-    print(
-        "-" * 70
-    )
-
+    print()
 
     print(
-        "Status:",
-        result[
-            "personalWellness"
-        ]["status"]
+        "MODEL PROBABILITIES"
     )
-
-
-    print(
-        "Adjustment:",
-        result[
-            "personalWellness"
-        ]["adjustment"]
-    )
-
-
-    print(
-        "Signals:"
-    )
-
-
-    for signal in (
-        result[
-            "personalWellness"
-        ]["signals"]
-    ):
-
-        print(
-            f"  • {signal}"
-        )
-
-
-    print(
-        "\nTRENDS"
-    )
-
 
     print(
         "-" * 70
@@ -262,19 +274,29 @@ def main():
 
     for key, value in (
         result[
-            "personalWellness"
-        ]["trends"].items()
+            "modelProbabilities"
+        ].items()
     ):
 
         print(
-            f"{key:25} : {value}"
+            f"{key:35} : {value}"
         )
 
 
-    print(
-        "\nDATA QUALITY"
-    )
+    # ========================================================
+    # WELLNESS STATUS
+    # ========================================================
 
+    wellness = result[
+        "wellness"
+    ]
+
+
+    print()
+
+    print(
+        "PERSONAL WELLNESS"
+    )
 
     print(
         "-" * 70
@@ -282,32 +304,300 @@ def main():
 
 
     print(
-        result[
-            "dataQuality"
+        f"{'Status':35} : "
+        f"{wellness['status']}"
+    )
+
+
+    print(
+        f"{'Baseline Score':35} : "
+        f"{wellness['baselineScore']}"
+    )
+
+
+    print(
+        f"{'Longitudinal Score':35} : "
+        f"{wellness['longitudinalScore']}"
+    )
+
+
+    print(
+        f"{'Personal Wellness Score':35} : "
+        f"{wellness['personalWellnessScore']}"
+    )
+
+
+    # ========================================================
+    # 7 / 14 / 30 DAY WINDOWS
+    # ========================================================
+
+    print()
+
+    print(
+        "LONGITUDINAL WINDOWS"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    windows = wellness[
+        "windows"
+    ]
+
+
+    for window_name in [
+        "7d",
+        "14d",
+        "30d",
+    ]:
+
+        window = windows[
+            window_name
         ]
-    )
 
+
+        print()
+
+        print(
+            f"{window_name.upper()} "
+            f"({window['records']} records)"
+        )
+
+
+        print(
+            f"  Overall Score : "
+            f"{window['score']}"
+        )
+
+
+        for (
+            dimension,
+            score
+        ) in window[
+            "dimensions"
+        ].items():
+
+            print(
+                f"  {dimension:20} : "
+                f"{score}"
+            )
+
+
+    # ========================================================
+    # SIGNALS
+    # ========================================================
+
+    print()
 
     print(
-        "\nRECOMMENDATIONS"
+        "WELLNESS SIGNALS"
     )
-
 
     print(
         "-" * 70
     )
 
 
-    for recommendation in (
-        result[
-            "personalWellness"
-        ]["recommendations"]
-    ):
+    signals = wellness[
+        "signals"
+    ]
+
+
+    if not signals:
 
         print(
-            f"  • {recommendation}"
+            "  No significant trend detected."
         )
 
+    else:
+
+        for signal in signals:
+
+            print(
+                f"  • "
+                f"{signal['dimension']} "
+                f"→ "
+                f"{signal['direction']} "
+                f"(strength: "
+                f"{signal['strength']})"
+            )
+
+
+    # ========================================================
+    # DATA QUALITY
+    # ========================================================
+
+    print()
+
+    print(
+        "DATA QUALITY"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    data_quality = result[
+        "dataQuality"
+    ]
+
+
+    print(
+        f"{'Records analyzed':35} : "
+        f"{data_quality['recordCount']}"
+    )
+
+
+    print(
+        f"{'Completeness':35} : "
+        f"{data_quality['completeness']}%"
+    )
+
+
+    print(
+        f"{'Recency':35} : "
+        f"{data_quality['recency']}%"
+    )
+
+
+    print(
+        f"{'Confidence':35} : "
+        f"{data_quality['confidence']}%"
+    )
+
+
+    print(
+        f"{'Quality level':35} : "
+        f"{data_quality['level']}"
+    )
+
+
+    # ========================================================
+    # METHOD
+    # ========================================================
+
+    print()
+
+    print(
+        "SCORING METHOD"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    method = wellness[
+        "method"
+    ]
+
+
+    print(
+        f"{'ML baseline weight':35} : "
+        f"{method['mlBaselineWeight']}"
+    )
+
+
+    print(
+        f"{'Longitudinal weight':35} : "
+        f"{method['longitudinalWeight']}"
+    )
+
+
+    print()
+
+    print(
+        "Window weights:"
+    )
+
+
+    for (
+        window,
+        weight
+    ) in method[
+        "windowWeights"
+    ].items():
+
+        print(
+            f"  {window:20} : "
+            f"{weight}"
+        )
+
+
+    print()
+
+    print(
+        "Dimension weights:"
+    )
+
+
+    for (
+        dimension,
+        weight
+    ) in method[
+        "dimensionWeights"
+    ].items():
+
+        print(
+            f"  {dimension:20} : "
+            f"{weight}"
+        )
+
+
+    # ========================================================
+    # SYSTEM INFORMATION
+    # ========================================================
+
+    print()
+
+    print(
+        "SYSTEM"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    print(
+        f"{'Model version':35} : "
+        f"{result['modelVersion']}"
+    )
+
+
+    print(
+        f"{'Blood pressure used':35} : "
+        f"{result['bloodPressureUsed']}"
+    )
+
+
+    print(
+        f"{'Records analyzed':35} : "
+        f"{result['recordsAnalyzed']}"
+    )
+
+
+    print()
+
+    print(
+        "=" * 70
+    )
+
+    print(
+        "ANALYSIS COMPLETE"
+    )
+
+    print(
+        "=" * 70
+    )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
 

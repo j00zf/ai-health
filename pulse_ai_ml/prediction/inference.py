@@ -17,7 +17,7 @@ from .wellness_engine import (
 
 
 # ============================================================
-# MAIN USER ANALYSIS
+# ANALYZE USER
 # ============================================================
 
 def analyze_user(
@@ -26,11 +26,10 @@ def analyze_user(
 ) -> Dict[str, Any]:
 
     # ========================================================
-    # ML INPUT
+    # ML PREDICTION
     # ========================================================
 
     predictor = get_predictor()
-
 
     ml_result = predictor.predict(
         profile
@@ -38,22 +37,34 @@ def analyze_user(
 
 
     # ========================================================
-    # BASELINE SCORES
+    # ML BASELINE SCORES
     # ========================================================
 
-    scores = build_score_response(
+    score_result = build_score_response(
         ml_result
     )
 
 
-    baseline_wellness = (
-        scores["scores"]
+    heart_score = (
+        score_result["scores"]
+        ["heartHealthScore"]
+    )
+
+
+    health_score = (
+        score_result["scores"]
+        ["healthScore"]
+    )
+
+
+    wellness_baseline = (
+        score_result["scores"]
         ["wellnessBaselineScore"]
     )
 
 
     # ========================================================
-    # ADAPT PULSE RECORDS
+    # NORMALIZE HEALTH RECORDS
     # ========================================================
 
     normalized_records = (
@@ -64,14 +75,14 @@ def analyze_user(
 
 
     # ========================================================
-    # PERSONAL WELLNESS
+    # LONGITUDINAL WELLNESS
     # ========================================================
 
     wellness = analyze_wellness(
 
         normalized_records,
 
-        baseline_wellness,
+        wellness_baseline,
     )
 
 
@@ -85,32 +96,16 @@ def analyze_user(
     # ========================================================
     # OVERALL WELLBEING
     # ========================================================
-    #
-    # Heart and Health remain population-model scores.
-    #
-    # Wellness becomes personalized using longitudinal data.
-    #
-    # ========================================================
 
-    heart_score = (
-        scores["scores"]
-        ["heartHealthScore"]
-    )
+    overall_wellbeing = (
+        calculate_overall_score(
 
+            heart_score,
 
-    health_score = (
-        scores["scores"]
-        ["healthScore"]
-    )
+            health_score,
 
-
-    overall = calculate_overall_score(
-
-        heart_score,
-
-        health_score,
-
-        personal_wellness,
+            personal_wellness,
+        )
     )
 
 
@@ -129,25 +124,29 @@ def analyze_user(
                 health_score,
 
             "wellnessBaselineScore":
-                baseline_wellness,
+                wellness_baseline,
 
             "personalWellnessScore":
                 personal_wellness,
 
             "overallWellbeingScore":
-                overall,
+                overall_wellbeing,
         },
 
 
         "bands":
-            scores["bands"],
+            score_result[
+                "bands"
+            ],
 
 
         "modelProbabilities":
-            scores["probabilities"],
+            score_result[
+                "probabilities"
+            ],
 
 
-        "personalWellness":
+        "wellness":
             wellness,
 
 
