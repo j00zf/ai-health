@@ -1,6 +1,10 @@
 from prediction.inference import analyze_user
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
 
     # ========================================================
@@ -9,27 +13,38 @@ def main():
 
     profile = {
 
-        "age": 25,
+        "age":
+            25,
 
-        "sex": 1,
+        "sex":
+            1,
 
-        "height_cm": 175,
+        "height_cm":
+            175,
 
-        "weight_kg": 70,
+        "weight_kg":
+            70,
 
-        "bmi": 22.86,
+        "bmi":
+            22.86,
 
-        "waist_cm": 80,
+        "waist_cm":
+            80,
 
-        "heart_rate": 72,
+        "heart_rate":
+            72,
 
-        "activity_minutes": 180,
+        "activity_minutes":
+            180,
 
-        "sleep_hours": 7.5,
+        "sleep_hours":
+            7.5,
 
-        "smoking": 0,
+        "smoking":
+            0,
 
-        "alcohol": 0,
+        "alcohol":
+            0,
     }
 
 
@@ -107,14 +122,14 @@ def main():
 
 
         # ----------------------------------------------------
-        # Heart rate remains stable
+        # Heart rate stable
         # ----------------------------------------------------
 
         heart_rate = 73
 
 
         # ----------------------------------------------------
-        # Weight remains relatively stable
+        # Weight stable
         # ----------------------------------------------------
 
         weight = (
@@ -127,7 +142,7 @@ def main():
 
 
         # ----------------------------------------------------
-        # BMI remains relatively stable
+        # BMI stable
         # ----------------------------------------------------
 
         bmi = (
@@ -140,7 +155,7 @@ def main():
 
 
         # ----------------------------------------------------
-        # Add daily record
+        # Add health record
         # ----------------------------------------------------
 
         health_records.append({
@@ -154,7 +169,7 @@ def main():
             "activeHours":
                 round(
                     active_hours,
-                    2
+                    2,
                 ),
 
             "activeZoneMinutes":
@@ -166,25 +181,25 @@ def main():
             "restingHeartRate":
                 round(
                     resting_hr,
-                    2
+                    2,
                 ),
 
             "sleep":
                 round(
                     sleep,
-                    2
+                    2,
                 ),
 
             "weight":
                 round(
                     weight,
-                    2
+                    2,
                 ),
 
             "bmi":
                 round(
                     bmi,
-                    2
+                    2,
                 ),
 
             "oxygenSaturation":
@@ -210,12 +225,12 @@ def main():
 
         profile,
 
-        health_records
+        health_records,
     )
 
 
     # ========================================================
-    # DISPLAY HEADER
+    # HEADER
     # ========================================================
 
     print()
@@ -249,7 +264,9 @@ def main():
 
 
     for key, value in (
-        result["scores"].items()
+        result[
+            "scores"
+        ].items()
     ):
 
         print(
@@ -284,7 +301,7 @@ def main():
 
 
     # ========================================================
-    # WELLNESS STATUS
+    # PERSONAL WELLNESS
     # ========================================================
 
     wellness = result[
@@ -308,18 +325,15 @@ def main():
         f"{wellness['status']}"
     )
 
-
     print(
         f"{'Baseline Score':35} : "
         f"{wellness['baselineScore']}"
     )
 
-
     print(
         f"{'Longitudinal Score':35} : "
         f"{wellness['longitudinalScore']}"
     )
-
 
     print(
         f"{'Personal Wellness Score':35} : "
@@ -328,7 +342,7 @@ def main():
 
 
     # ========================================================
-    # 7 / 14 / 30 DAY WINDOWS
+    # LONGITUDINAL WINDOWS
     # ========================================================
 
     print()
@@ -347,11 +361,11 @@ def main():
     ]
 
 
-    for window_name in [
+    for window_name in (
         "7d",
         "14d",
         "30d",
-    ]:
+    ):
 
         window = windows[
             window_name
@@ -374,7 +388,7 @@ def main():
 
         for (
             dimension,
-            score
+            score,
         ) in window[
             "dimensions"
         ].items():
@@ -386,7 +400,7 @@ def main():
 
 
     # ========================================================
-    # SIGNALS
+    # WELLNESS SIGNALS
     # ========================================================
 
     print()
@@ -450,24 +464,20 @@ def main():
         f"{data_quality['recordCount']}"
     )
 
-
     print(
         f"{'Completeness':35} : "
         f"{data_quality['completeness']}%"
     )
-
 
     print(
         f"{'Recency':35} : "
         f"{data_quality['recency']}%"
     )
 
-
     print(
         f"{'Confidence':35} : "
         f"{data_quality['confidence']}%"
     )
-
 
     print(
         f"{'Quality level':35} : "
@@ -476,7 +486,7 @@ def main():
 
 
     # ========================================================
-    # METHOD
+    # SCORING METHOD
     # ========================================================
 
     print()
@@ -500,7 +510,6 @@ def main():
         f"{method['mlBaselineWeight']}"
     )
 
-
     print(
         f"{'Longitudinal weight':35} : "
         f"{method['longitudinalWeight']}"
@@ -516,7 +525,7 @@ def main():
 
     for (
         window,
-        weight
+        weight,
     ) in method[
         "windowWeights"
     ].items():
@@ -536,7 +545,7 @@ def main():
 
     for (
         dimension,
-        weight
+        weight,
     ) in method[
         "dimensionWeights"
     ].items():
@@ -546,20 +555,21 @@ def main():
             f"{weight}"
         )
 
+
     # ========================================================
     # EXPLAINABILITY
     # ========================================================
 
     explanation = result[
         "explanation"
-    ]   
+    ]
 
 
     print()
 
     print(
         "EXPLAINABILITY"
-        )
+    )
 
     print(
         "-" * 70
@@ -571,7 +581,8 @@ def main():
     )
 
     print(
-        f"  {explanation['trendExplanation']}"
+        f"  "
+        f"{explanation['trendExplanation']}"
     )
 
 
@@ -634,15 +645,18 @@ def main():
     )
 
     print(
-        f"  {explanation['positiveSummary']}"
+        f"  "
+        f"{explanation['positiveSummary']}"
     )
 
     print(
-        f"  {explanation['attentionSummary']}"
+        f"  "
+        f"{explanation['attentionSummary']}"
     )
 
+
     # ========================================================
-    # RECOMMENDATIONS
+    # PERSONALIZED RECOMMENDATIONS
     # ========================================================
 
     recommendation_result = result[
@@ -666,7 +680,8 @@ def main():
     )
 
     print(
-        f"  {recommendation_result['overallMessage']}"
+        f"  "
+        f"{recommendation_result['overallMessage']}"
     )
 
 
@@ -677,17 +692,124 @@ def main():
     )
 
     print(
-        f"  {recommendation_result['trendMessage']}"
+        f"  "
+        f"{recommendation_result['trendMessage']}"
     )
 
 
+    # --------------------------------------------------------
+    # Main opportunity
+    # --------------------------------------------------------
+
     print()
 
-    for recommendation in (
+    print(
+        "MAIN OPPORTUNITY"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    main_opportunity = (
+        recommendation_result[
+            "mainOpportunity"
+        ]
+    )
+
+
+    if main_opportunity:
+
+        print(
+            f"Area     : "
+            f"{main_opportunity['label']}"
+        )
+
+        print(
+            f"Score    : "
+            f"{main_opportunity['score']}"
+        )
+
+        print(
+            f"Priority : "
+            f"{main_opportunity['priority'].upper()}"
+        )
+
+        print(
+            f"Reason   : "
+            f"{main_opportunity['reason']}"
+        )
+
+        print(
+            f"Action   : "
+            f"{main_opportunity['action']}"
+        )
+
+        print(
+            f"Goal     : "
+            f"{main_opportunity['goal']}"
+        )
+
+    else:
+
+        print(
+            "No major opportunity identified."
+        )
+
+
+    # --------------------------------------------------------
+    # Other actionable recommendations
+    # --------------------------------------------------------
+
+    print()
+
+    print(
+        "OTHER RECOMMENDATIONS"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    recommendations = (
         recommendation_result[
             "recommendations"
         ]
-    ):
+    )
+
+
+    main_dimension = (
+
+        main_opportunity[
+            "dimension"
+        ]
+
+        if main_opportunity
+
+        else None
+    )
+
+
+    found_other = False
+
+
+    for recommendation in recommendations:
+
+        if (
+            recommendation[
+                "dimension"
+            ]
+            ==
+            main_dimension
+        ):
+
+            continue
+
+
+        found_other = True
+
 
         print(
             f"[{recommendation['priority'].upper()}] "
@@ -710,6 +832,118 @@ def main():
         )
 
         print()
+
+
+    if not found_other:
+
+        print(
+            "No additional actionable recommendations."
+        )
+
+
+    # --------------------------------------------------------
+    # Maintenance
+    # --------------------------------------------------------
+
+    print(
+        "MAINTAIN"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    maintenance = (
+        recommendation_result.get(
+            "maintenance",
+            []
+        )
+    )
+
+    if maintenance:
+
+        for item in maintenance:
+
+            label = item.get(
+                "label",
+                "Unknown"
+            )
+
+            score = item.get(
+                "score"
+            )
+
+            if score is not None:
+
+                print(
+                    f"  ✓ "
+                    f"{label}: "
+                    f"{score}"
+                )
+
+            else:
+
+                print(
+                    f"  ✓ "
+                    f"{label}"
+                )
+
+    else:
+
+        print(
+            "  No specific maintenance areas."
+        )
+    # ========================================================
+    # WELLBEING FORECAST
+    # ========================================================
+
+    forecast = result[
+        "forecast"
+    ]
+
+
+    print()
+
+    print(
+        "WELLBEING FORECAST"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    print(
+        f"{'Current Score':35} : "
+        f"{forecast['current']}"
+    )
+
+    print(
+        f"{'7-Day Forecast':35} : "
+        f"{forecast['forecast7d']}"
+    )
+
+    print(
+        f"{'14-Day Forecast':35} : "
+        f"{forecast['forecast14d']}"
+    )
+
+    print(
+        f"{'30-Day Forecast':35} : "
+        f"{forecast['forecast30d']}"
+    )
+
+    print(
+        f"{'Trajectory':35} : "
+        f"{forecast['trajectory']}"
+    )
+
+    print(
+        f"{'Confidence':35} : "
+        f"{forecast['confidence']}%"
+    )
+
+
     # ========================================================
     # AI INTERPRETATION
     # ========================================================
@@ -730,6 +964,9 @@ def main():
     )
 
 
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
 
     print()
 
@@ -741,14 +978,19 @@ def main():
         ai_result[
             "summary"
         ]
-    )   
+    )
 
+
+    # --------------------------------------------------------
+    # Strengths
+    # --------------------------------------------------------
 
     print()
 
     print(
         "STRENGTHS"
     )
+
 
     for strength in (
         ai_result[
@@ -761,11 +1003,16 @@ def main():
         )
 
 
+    # --------------------------------------------------------
+    # Opportunities
+    # --------------------------------------------------------
+
     print()
 
     print(
         "OPPORTUNITIES"
     )
+
 
     for opportunity in (
         ai_result[
@@ -778,11 +1025,16 @@ def main():
         )
 
 
+    # --------------------------------------------------------
+    # Actions
+    # --------------------------------------------------------
+
     print()
 
     print(
         "ACTIONS"
     )
+
 
     for action in (
         ai_result[
@@ -795,6 +1047,33 @@ def main():
         )
 
 
+    # --------------------------------------------------------
+    # Forecast interpretation
+    # --------------------------------------------------------
+
+    print()
+
+    print(
+        "FORECAST INTERPRETATION"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    print(
+        ai_result.get(
+            "forecast",
+            "No forecast interpretation available.",
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # Narrative
+    # --------------------------------------------------------
+
     print()
 
     print(
@@ -805,6 +1084,7 @@ def main():
         "-" * 70
     )
 
+
     print(
         ai_result[
             "narrative"
@@ -812,26 +1092,33 @@ def main():
     )
 
 
+    # ========================================================
+    # AI METADATA
+    # ========================================================
+
     print()
 
     print(
         "AI METADATA"
     )
 
+
     print(
-        f"Provider        : "
+        f"{'Provider':35} : "
         f"{ai_result['provider']}"
     )
 
     print(
-        f"Grounded        : "
+        f"{'Grounded':35} : "
         f"{ai_result['grounded']}"
     )
 
     print(
-        f"Medical Diagnosis: "
+        f"{'Medical Diagnosis':35} : "
         f"{ai_result['medicalDiagnosis']}"
     )
+
+
     # ========================================================
     # SYSTEM INFORMATION
     # ========================================================
@@ -852,18 +1139,20 @@ def main():
         f"{result['modelVersion']}"
     )
 
-
     print(
         f"{'Blood pressure used':35} : "
         f"{result['bloodPressureUsed']}"
     )
-
 
     print(
         f"{'Records analyzed':35} : "
         f"{result['recordsAnalyzed']}"
     )
 
+
+    # ========================================================
+    # COMPLETE
+    # ========================================================
 
     print()
 

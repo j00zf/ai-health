@@ -2,6 +2,10 @@ from typing import Any, Dict, List
 
 from .predictor import get_predictor
 
+from .forecast_engine import (
+    forecast_wellbeing,
+)
+
 from .explainability import (
     explain_wellness,
 )
@@ -66,12 +70,10 @@ def analyze_user(
         ["heartHealthScore"]
     )
 
-
     health_score = (
         score_result["scores"]
         ["healthScore"]
     )
-
 
     wellness_baseline = (
         score_result["scores"]
@@ -91,7 +93,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 4. LONGITUDINAL WELLNESS
+    # 4. LONGITUDINAL WELLNESS ANALYSIS
     # ========================================================
 
     wellness = analyze_wellness(
@@ -119,7 +121,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 6. RECOMMENDATIONS
+    # 6. PERSONALIZED RECOMMENDATIONS
     # ========================================================
 
     recommendations = (
@@ -133,7 +135,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 7. OVERALL WELLBEING
+    # 7. OVERALL WELLBEING SCORE
     # ========================================================
 
     overall_wellbeing = (
@@ -149,10 +151,32 @@ def analyze_user(
 
 
     # ========================================================
-    # 8. BASE ANALYSIS OBJECT
+    # 8. WELLBEING FORECAST
+    #
+    # Uses the longitudinal health records to project
+    # the future wellness trajectory.
+    # ========================================================
+
+    forecast = forecast_wellbeing(
+
+        wellness,
+
+        normalized_records,
+    )
+
+
+    # ========================================================
+    # 9. BASE ANALYSIS
+    #
+    # This object contains everything required by the
+    # AI context builder.
     # ========================================================
 
     base_analysis = {
+
+        # ----------------------------------------------------
+        # SCORES
+        # ----------------------------------------------------
 
         "scores": {
 
@@ -172,27 +196,70 @@ def analyze_user(
                 overall_wellbeing,
         },
 
+
+        # ----------------------------------------------------
+        # MODEL PROBABILITIES
+        # ----------------------------------------------------
+
         "modelProbabilities":
             score_result[
                 "probabilities"
             ],
 
+
+        # ----------------------------------------------------
+        # WELLNESS
+        # ----------------------------------------------------
+
         "wellness":
             wellness,
+
+
+        # ----------------------------------------------------
+        # EXPLAINABILITY
+        # ----------------------------------------------------
 
         "explanation":
             explanation,
 
+
+        # ----------------------------------------------------
+        # RECOMMENDATIONS
+        # ----------------------------------------------------
+
         "recommendations":
             recommendations,
+
+
+        # ----------------------------------------------------
+        # FORECAST
+        # ----------------------------------------------------
+
+        "forecast":
+            forecast,
+
+
+        # ----------------------------------------------------
+        # DATA QUALITY
+        # ----------------------------------------------------
 
         "dataQuality":
             wellness[
                 "dataQuality"
             ],
 
+
+        # ----------------------------------------------------
+        # MODEL INFORMATION
+        # ----------------------------------------------------
+
         "modelVersion":
             "v2-deployment",
+
+
+        # ----------------------------------------------------
+        # BLOOD PRESSURE
+        # ----------------------------------------------------
 
         "bloodPressureUsed":
             False,
@@ -200,7 +267,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 9. AI CONTEXT
+    # 10. BUILD GROUNDED AI CONTEXT
     # ========================================================
 
     ai_context = build_ai_context(
@@ -209,7 +276,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 10. AI INTERPRETATION
+    # 11. AI INTERPRETATION
     # ========================================================
 
     interpreter = get_interpreter()
@@ -222,51 +289,118 @@ def analyze_user(
 
 
     # ========================================================
-    # 11. FINAL RESULT
+    # 12. FINAL RESULT
     # ========================================================
 
     return {
+
+        # ----------------------------------------------------
+        # SCORES
+        # ----------------------------------------------------
 
         "scores":
             base_analysis[
                 "scores"
             ],
 
+
+        # ----------------------------------------------------
+        # SCORE BANDS
+        # ----------------------------------------------------
+
         "bands":
             score_result[
                 "bands"
             ],
+
+
+        # ----------------------------------------------------
+        # MODEL PROBABILITIES
+        # ----------------------------------------------------
 
         "modelProbabilities":
             score_result[
                 "probabilities"
             ],
 
+
+        # ----------------------------------------------------
+        # WELLNESS
+        # ----------------------------------------------------
+
         "wellness":
             wellness,
+
+
+        # ----------------------------------------------------
+        # EXPLAINABILITY
+        # ----------------------------------------------------
 
         "explanation":
             explanation,
 
+
+        # ----------------------------------------------------
+        # RECOMMENDATIONS
+        # ----------------------------------------------------
+
         "recommendations":
             recommendations,
+
+
+        # ----------------------------------------------------
+        # FORECAST
+        # ----------------------------------------------------
+
+        "forecast":
+            forecast,
+
+
+        # ----------------------------------------------------
+        # AI CONTEXT
+        # ----------------------------------------------------
 
         "aiContext":
             ai_context,
 
+
+        # ----------------------------------------------------
+        # AI INTERPRETATION
+        # ----------------------------------------------------
+
         "aiInterpretation":
             ai_interpretation,
+
+
+        # ----------------------------------------------------
+        # DATA QUALITY
+        # ----------------------------------------------------
 
         "dataQuality":
             wellness[
                 "dataQuality"
             ],
 
+
+        # ----------------------------------------------------
+        # MODEL INFORMATION
+        # ----------------------------------------------------
+
         "modelVersion":
             "v2-deployment",
 
+
+        # ----------------------------------------------------
+        # DEPLOYMENT CONFIGURATION
+        # ----------------------------------------------------
+
         "bloodPressureUsed":
             False,
+
+
+        # ----------------------------------------------------
+        # RECORD COUNT
+        # ----------------------------------------------------
 
         "recordsAnalyzed":
             len(

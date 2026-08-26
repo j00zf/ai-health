@@ -13,7 +13,7 @@ class PulseAIInterpreter:
     This class does NOT calculate health scores.
 
     It only interprets values already produced by the
-    ML/scoring pipeline.
+    ML/scoring/forecasting pipeline.
     """
 
 
@@ -38,6 +38,10 @@ class PulseAIInterpreter:
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
 
+        # ----------------------------------------------------
+        # Extract source sections
+        # ----------------------------------------------------
+
         scores = context.get(
             "scores",
             {},
@@ -45,11 +49,6 @@ class PulseAIInterpreter:
 
         wellness = context.get(
             "wellness",
-            {},
-        )
-
-        dimensions = context.get(
-            "currentDimensions",
             {},
         )
 
@@ -68,9 +67,14 @@ class PulseAIInterpreter:
             {},
         )
 
+        forecast = context.get(
+            "forecast",
+            {},
+        )
+
 
         # ====================================================
-        # Scores
+        # SCORE VALUES
         # ====================================================
 
         heart_score = scores.get(
@@ -91,7 +95,7 @@ class PulseAIInterpreter:
 
 
         # ====================================================
-        # Wellness status
+        # WELLNESS STATUS
         # ====================================================
 
         status = wellness.get(
@@ -101,7 +105,7 @@ class PulseAIInterpreter:
 
 
         # ====================================================
-        # Main opportunity
+        # MAIN OPPORTUNITY
         # ====================================================
 
         main_opportunity = (
@@ -112,7 +116,7 @@ class PulseAIInterpreter:
 
 
         # ====================================================
-        # Generate summary
+        # SUMMARY
         # ====================================================
 
         summary = self._build_summary(
@@ -130,7 +134,7 @@ class PulseAIInterpreter:
 
 
         # ====================================================
-        # Generate strengths
+        # STRENGTHS
         # ====================================================
 
         strengths = (
@@ -141,19 +145,21 @@ class PulseAIInterpreter:
 
 
         # ====================================================
-        # Generate opportunities
+        # OPPORTUNITIES
         # ====================================================
 
         opportunities = (
             self._build_opportunities(
+
                 explanation,
+
                 main_opportunity,
             )
         )
 
 
         # ====================================================
-        # Generate actions
+        # ACTIONS
         # ====================================================
 
         actions = (
@@ -164,7 +170,18 @@ class PulseAIInterpreter:
 
 
         # ====================================================
-        # Build final interpretation
+        # FORECAST
+        # ====================================================
+
+        forecast_interpretation = (
+            self._build_forecast_interpretation(
+                forecast
+            )
+        )
+
+
+        # ====================================================
+        # NARRATIVE
         # ====================================================
 
         narrative = self._build_narrative(
@@ -177,12 +194,12 @@ class PulseAIInterpreter:
 
             actions,
 
-            status,
+            forecast_interpretation,
         )
 
 
         # ====================================================
-        # Return
+        # FINAL RESULT
         # ====================================================
 
         return {
@@ -198,6 +215,9 @@ class PulseAIInterpreter:
 
             "actions":
                 actions,
+
+            "forecast":
+                forecast_interpretation,
 
             "narrative":
                 narrative,
@@ -246,7 +266,8 @@ class PulseAIInterpreter:
 
             f"Your modeled heart-health score is "
             f"{heart_score:.1f}, while your modeled "
-            f"general health score is {health_score:.1f}. "
+            f"general health score is "
+            f"{health_score:.1f}. "
 
             f"Your personal wellness score is "
             f"{personal_score:.1f}, and your recent "
@@ -269,7 +290,6 @@ class PulseAIInterpreter:
             [],
         )
 
-
         strengths = []
 
 
@@ -286,6 +306,7 @@ class PulseAIInterpreter:
             score = factor.get(
                 "score"
             )
+
 
             if score is not None:
 
@@ -326,6 +347,10 @@ class PulseAIInterpreter:
         opportunities = []
 
 
+        # ----------------------------------------------------
+        # Main opportunity
+        # ----------------------------------------------------
+
         if main_opportunity:
 
             label = main_opportunity.get(
@@ -340,10 +365,6 @@ class PulseAIInterpreter:
                 "score"
             )
 
-            reason = main_opportunity.get(
-                "reason"
-            )
-
 
             if score is not None:
 
@@ -354,12 +375,10 @@ class PulseAIInterpreter:
                     f"with a score of {score:.1f}."
                 )
 
-            elif reason:
 
-                opportunities.append(
-                    reason
-                )
-
+        # ----------------------------------------------------
+        # Attention factors
+        # ----------------------------------------------------
 
         attention_factors = explanation.get(
             "attentionFactors",
@@ -401,7 +420,11 @@ class PulseAIInterpreter:
                 )
 
 
-            if text not in opportunities:
+            # Prevent duplicate opportunity
+            if not any(
+                label in existing
+                for existing in opportunities
+            ):
 
                 opportunities.append(
                     text
@@ -438,6 +461,7 @@ class PulseAIInterpreter:
                 "action"
             )
 
+
             if action:
 
                 actions.append(
@@ -446,6 +470,99 @@ class PulseAIInterpreter:
 
 
         return actions
+
+
+    # ========================================================
+    # FORECAST INTERPRETATION
+    # ========================================================
+
+    def _build_forecast_interpretation(
+
+        self,
+
+        forecast: Dict[str, Any],
+
+    ) -> str:
+
+        if not forecast:
+
+            return (
+                "No wellbeing forecast is currently available."
+            )
+
+
+        current = forecast.get(
+            "current"
+        )
+
+        forecast_7d = forecast.get(
+            "forecast7d"
+        )
+
+        forecast_14d = forecast.get(
+            "forecast14d"
+        )
+
+        forecast_30d = forecast.get(
+            "forecast30d"
+        )
+
+        trajectory = forecast.get(
+            "trajectory",
+            "unknown",
+        )
+
+        confidence = forecast.get(
+            "confidence",
+            0,
+        )
+
+
+        # ----------------------------------------------------
+        # Handle incomplete forecast
+        # ----------------------------------------------------
+
+        if (
+            current is None
+            or forecast_7d is None
+            or forecast_14d is None
+            or forecast_30d is None
+        ):
+
+            return (
+                "A complete wellbeing forecast "
+                "is not currently available."
+            )
+
+
+        trajectory_text = (
+            str(trajectory)
+            .replace(
+                "_",
+                " ",
+            )
+        )
+
+
+        return (
+
+            f"Based on the current longitudinal pattern, "
+            f"the wellbeing trajectory is projected as "
+            f"{trajectory_text}. "
+
+            f"The current forecast score is "
+            f"{current:.1f}. "
+
+            f"The projected 7-day score is "
+            f"{forecast_7d:.1f}, the projected 14-day "
+            f"score is {forecast_14d:.1f}, and the "
+            f"projected 30-day score is "
+            f"{forecast_30d:.1f}. "
+
+            f"The forecast confidence is approximately "
+            f"{confidence:.0f}%."
+
+        )
 
 
     # ========================================================
@@ -464,7 +581,7 @@ class PulseAIInterpreter:
 
         actions: List[str],
 
-        status: str,
+        forecast: str,
 
     ) -> str:
 
@@ -486,11 +603,17 @@ class PulseAIInterpreter:
 
         if strengths:
 
-            parts.append(
-                "Your strongest current areas are "
-                + " ".join(
+            strengths_text = (
+                "; ".join(
                     strengths
                 )
+            )
+
+            parts.append(
+
+                "Your strongest current areas are "
+                + strengths_text
+
             )
 
 
@@ -500,12 +623,18 @@ class PulseAIInterpreter:
 
         if opportunities:
 
-            parts.append(
-                "The main opportunities identified "
-                "by the analysis are "
-                + " ".join(
+            opportunities_text = (
+                "; ".join(
                     opportunities
                 )
+            )
+
+            parts.append(
+
+                "The main opportunities identified "
+                "by the analysis are "
+                + opportunities_text
+
             )
 
 
@@ -515,25 +644,46 @@ class PulseAIInterpreter:
 
         if actions:
 
-            parts.append(
-                "Based on these signals, the most "
-                "relevant actions are "
-                + " ".join(
+            actions_text = (
+                "; ".join(
                     actions
                 )
             )
 
+            parts.append(
+
+                "Based on these signals, the most "
+                "relevant actions are "
+                + actions_text
+
+            )
+
 
         # ----------------------------------------------------
-        # Final safety statement
+        # Forecast
+        # ----------------------------------------------------
+
+        if forecast:
+
+            parts.append(
+                forecast
+            )
+
+
+        # ----------------------------------------------------
+        # Safety
         # ----------------------------------------------------
 
         parts.append(
 
             "These results are model-based wellness "
             "insights rather than a medical diagnosis. "
+            "The forecast represents a projection from "
+            "the available longitudinal pattern and "
+            "does not guarantee a future outcome. "
             "The interpretation does not replace "
             "professional medical advice."
+
         )
 
 
