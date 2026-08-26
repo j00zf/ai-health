@@ -4,7 +4,17 @@ import statistics
 
 
 # ============================================================
-# HELPERS
+# CONFIGURATION
+# ============================================================
+
+MIN_DATA_POINTS = 3
+
+
+MAX_ADJUSTMENT = 15.0
+
+
+# ============================================================
+# SAFE NUMBER
 # ============================================================
 
 def safe_float(
@@ -14,9 +24,7 @@ def safe_float(
     try:
 
         if value is None:
-
             return None
-
 
         return float(value)
 
@@ -29,29 +37,41 @@ def safe_float(
 
 
 # ============================================================
+# CLEAN VALUES
+# ============================================================
+
+def clean_values(
+    values: List[Any]
+) -> List[float]:
+
+    cleaned = []
+
+    for value in values:
+
+        number = safe_float(
+            value
+        )
+
+        if number is not None:
+
+            cleaned.append(
+                number
+            )
+
+    return cleaned
+
+
+# ============================================================
 # TREND
 # ============================================================
 
 def calculate_trend(
-    values: List[float]
+    values: List[Any]
 ) -> str:
 
-    values = [
-
-        safe_float(value)
-
-        for value in values
-    ]
-
-
-    values = [
-
-        value
-
-        for value in values
-
-        if value is not None
-    ]
+    values = clean_values(
+        values
+    )
 
 
     if len(values) < 2:
@@ -76,41 +96,30 @@ def calculate_trend(
     ) * 100
 
 
-    if change > 5:
+    if change >= 5:
 
         return "increasing"
 
-    if change < -5:
+
+    if change <= -5:
 
         return "decreasing"
+
 
     return "stable"
 
 
 # ============================================================
-# TREND STRENGTH
+# CHANGE %
 # ============================================================
 
-def trend_change_percent(
-    values: List[float]
+def calculate_change(
+    values: List[Any]
 ) -> Optional[float]:
 
-    values = [
-
-        safe_float(value)
-
-        for value in values
-    ]
-
-
-    values = [
-
-        value
-
-        for value in values
-
-        if value is not None
-    ]
+    values = clean_values(
+        values
+    )
 
 
     if len(values) < 2:
@@ -140,13 +149,43 @@ def trend_change_percent(
 
 
 # ============================================================
-# PERSONAL WELLNESS ENGINE
+# AVERAGE
+# ============================================================
+
+def average(
+    values: List[Any]
+) -> Optional[float]:
+
+    values = clean_values(
+        values
+    )
+
+
+    if not values:
+
+        return None
+
+
+    return round(
+        statistics.mean(
+            values
+        ),
+        2
+    )
+
+
+# ============================================================
+# WELLNESS ENGINE
 # ============================================================
 
 def analyze_wellness(
     records: List[Dict[str, Any]],
     baseline_score: float,
 ) -> Dict[str, Any]:
+
+    # --------------------------------------------------------
+    # No data
+    # --------------------------------------------------------
 
     if not records:
 
@@ -158,93 +197,129 @@ def analyze_wellness(
                     2
                 ),
 
-            "adjustment":
-                0,
+            "baselineScore":
+                round(
+                    baseline_score,
+                    2
+                ),
 
-            "dataPoints":
-                0,
+            "adjustment":
+                0.0,
 
             "status":
                 "insufficient_data",
 
-            "trends": {},
+            "dataPoints":
+                0,
 
-            "signals": [],
+            "trends":
+                {},
 
-            "recommendations": [],
+            "changes":
+                {},
+
+            "averages":
+                {},
+
+            "signals":
+                [],
+
+            "recommendations":
+                [],
         }
 
 
-    # --------------------------------------------------------
-    # Sort records by date if available
-    # --------------------------------------------------------
-
-    sorted_records = list(
-        records
-    )
-
-
     # ========================================================
-    # Extract metrics
+    # Extract data
     # ========================================================
 
-    activity_values = [
+    activity = [
 
         record.get(
             "activity_minutes"
         )
 
-        for record in sorted_records
+        for record in records
     ]
 
 
-    sleep_values = [
+    steps = [
+
+        record.get(
+            "steps"
+        )
+
+        for record in records
+    ]
+
+
+    sleep = [
 
         record.get(
             "sleep_hours"
         )
 
-        for record in sorted_records
+        for record in records
     ]
 
 
-    heart_rate_values = [
+    heart_rate = [
 
         record.get(
             "heart_rate"
         )
 
-        for record in sorted_records
+        for record in records
     ]
 
 
-    resting_hr_values = [
+    resting_hr = [
 
         record.get(
             "resting_heart_rate"
         )
 
-        for record in sorted_records
+        for record in records
     ]
 
 
-    weight_values = [
+    weight = [
 
         record.get(
             "weight_kg"
         )
 
-        for record in sorted_records
+        for record in records
     ]
 
 
-    spo2_values = [
+    bmi = [
+
+        record.get(
+            "bmi"
+        )
+
+        for record in records
+    ]
+
+
+    spo2 = [
 
         record.get(
             "spo2"
         )
 
-        for record in sorted_records
+        for record in records
+    ]
+
+
+    calories = [
+
+        record.get(
+            "calories"
+        )
+
+        for record in records
     ]
 
 
@@ -256,70 +331,153 @@ def analyze_wellness(
 
         "activity":
             calculate_trend(
-                activity_values
+                activity
+            ),
+
+        "steps":
+            calculate_trend(
+                steps
             ),
 
         "sleep":
             calculate_trend(
-                sleep_values
+                sleep
             ),
 
         "heartRate":
             calculate_trend(
-                heart_rate_values
+                heart_rate
             ),
 
         "restingHeartRate":
             calculate_trend(
-                resting_hr_values
+                resting_hr
             ),
 
         "weight":
             calculate_trend(
-                weight_values
+                weight
+            ),
+
+        "bmi":
+            calculate_trend(
+                bmi
             ),
 
         "spo2":
             calculate_trend(
-                spo2_values
+                spo2
+            ),
+
+        "calories":
+            calculate_trend(
+                calories
             ),
     }
 
 
     # ========================================================
-    # Percentage changes
+    # Changes
     # ========================================================
 
     changes = {
 
         "activity":
-            trend_change_percent(
-                activity_values
+            calculate_change(
+                activity
+            ),
+
+        "steps":
+            calculate_change(
+                steps
             ),
 
         "sleep":
-            trend_change_percent(
-                sleep_values
+            calculate_change(
+                sleep
             ),
 
         "heartRate":
-            trend_change_percent(
-                heart_rate_values
+            calculate_change(
+                heart_rate
             ),
 
         "restingHeartRate":
-            trend_change_percent(
-                resting_hr_values
+            calculate_change(
+                resting_hr
             ),
 
         "weight":
-            trend_change_percent(
-                weight_values
+            calculate_change(
+                weight
+            ),
+
+        "bmi":
+            calculate_change(
+                bmi
             ),
 
         "spo2":
-            trend_change_percent(
-                spo2_values
+            calculate_change(
+                spo2
+            ),
+
+        "calories":
+            calculate_change(
+                calories
+            ),
+    }
+
+
+    # ========================================================
+    # Averages
+    # ========================================================
+
+    averages = {
+
+        "activityMinutes":
+            average(
+                activity
+            ),
+
+        "steps":
+            average(
+                steps
+            ),
+
+        "sleepHours":
+            average(
+                sleep
+            ),
+
+        "heartRate":
+            average(
+                heart_rate
+            ),
+
+        "restingHeartRate":
+            average(
+                resting_hr
+            ),
+
+        "weightKg":
+            average(
+                weight
+            ),
+
+        "bmi":
+            average(
+                bmi
+            ),
+
+        "spo2":
+            average(
+                spo2
+            ),
+
+        "calories":
+            average(
+                calories
             ),
     }
 
@@ -330,14 +488,16 @@ def analyze_wellness(
 
     adjustment = 0.0
 
+
     signals = []
+
 
     recommendations = []
 
 
-    # --------------------------------------------------------
-    # Activity
-    # --------------------------------------------------------
+    # ========================================================
+    # ACTIVITY
+    # ========================================================
 
     activity_change = (
         changes["activity"]
@@ -348,29 +508,60 @@ def analyze_wellness(
 
         if activity_change >= 10:
 
-            adjustment += 4
+            adjustment += 3
 
             signals.append(
                 "activity_improving"
             )
 
+
         elif activity_change <= -10:
 
-            adjustment -= 4
+            adjustment -= 3
 
             signals.append(
                 "activity_declining"
             )
 
             recommendations.append(
-                "Increase activity gradually "
-                "and maintain consistency."
+                "Gradually increase daily "
+                "physical activity and maintain "
+                "consistency."
             )
 
 
-    # --------------------------------------------------------
-    # Sleep
-    # --------------------------------------------------------
+    # ========================================================
+    # STEPS
+    # ========================================================
+
+    steps_change = (
+        changes["steps"]
+    )
+
+
+    if steps_change is not None:
+
+        if steps_change >= 10:
+
+            adjustment += 2
+
+            signals.append(
+                "step_count_improving"
+            )
+
+
+        elif steps_change <= -15:
+
+            adjustment -= 2
+
+            signals.append(
+                "step_count_declining"
+            )
+
+
+    # ========================================================
+    # SLEEP
+    # ========================================================
 
     sleep_change = (
         changes["sleep"]
@@ -387,6 +578,7 @@ def analyze_wellness(
                 "sleep_improving"
             )
 
+
         elif sleep_change <= -10:
 
             adjustment -= 4
@@ -396,14 +588,14 @@ def analyze_wellness(
             )
 
             recommendations.append(
-                "Focus on a consistent sleep "
-                "schedule and adequate sleep duration."
+                "Focus on maintaining a consistent "
+                "sleep schedule and adequate sleep."
             )
 
 
-    # --------------------------------------------------------
-    # Resting heart rate
-    # --------------------------------------------------------
+    # ========================================================
+    # RESTING HEART RATE
+    # ========================================================
 
     resting_change = (
         changes["restingHeartRate"]
@@ -420,6 +612,7 @@ def analyze_wellness(
                 "resting_heart_rate_improving"
             )
 
+
         elif resting_change >= 10:
 
             adjustment -= 3
@@ -429,14 +622,14 @@ def analyze_wellness(
             )
 
             recommendations.append(
-                "Pay attention to recovery, "
-                "sleep and recent activity load."
+                "Pay attention to recovery, sleep, "
+                "stress and recent activity load."
             )
 
 
-    # --------------------------------------------------------
-    # SpO2
-    # --------------------------------------------------------
+    # ========================================================
+    # SPO2
+    # ========================================================
 
     spo2_change = (
         changes["spo2"]
@@ -447,25 +640,56 @@ def analyze_wellness(
 
         if spo2_change <= -3:
 
-            adjustment -= 3
+            adjustment -= 2
 
             signals.append(
-                "spo2_declining"
+                "oxygen_saturation_declining"
             )
 
 
     # ========================================================
-    # Bound adjustment
+    # WEIGHT
+    # ========================================================
+    #
+    # We deliberately don't label weight changes as
+    # automatically good or bad.
+    #
+    # The direction depends on the user's goal.
+    #
+    # Goal-specific handling comes later.
+    #
+    # ========================================================
+
+    weight_change = (
+        changes["weight"]
+    )
+
+
+    if weight_change is not None:
+
+        if abs(weight_change) >= 5:
+
+            signals.append(
+                "weight_change_detected"
+            )
+
+
+    # ========================================================
+    # LIMIT ADJUSTMENT
     # ========================================================
 
     adjustment = max(
-        -15.0,
+        -MAX_ADJUSTMENT,
         min(
-            15.0,
+            MAX_ADJUSTMENT,
             adjustment
         )
     )
 
+
+    # ========================================================
+    # PERSONAL SCORE
+    # ========================================================
 
     personal_score = (
         baseline_score
@@ -484,7 +708,7 @@ def analyze_wellness(
 
 
     # ========================================================
-    # Summary status
+    # STATUS
     # ========================================================
 
     if adjustment >= 5:
@@ -499,6 +723,65 @@ def analyze_wellness(
 
         status = "stable"
 
+
+    # ========================================================
+    # DATA QUALITY
+    # ========================================================
+
+    available_metrics = 0
+
+    total_metrics = 8
+
+
+    metric_values = [
+
+        activity,
+        steps,
+        sleep,
+        heart_rate,
+        resting_hr,
+        weight,
+        bmi,
+        spo2,
+    ]
+
+
+    for metric in metric_values:
+
+        if clean_values(
+            metric
+        ):
+
+            available_metrics += 1
+
+
+    completeness = (
+        available_metrics
+        /
+        total_metrics
+    ) * 100
+
+
+    if completeness >= 75:
+
+        data_quality = "high"
+
+    elif completeness >= 50:
+
+        data_quality = "moderate"
+
+    elif completeness >= 25:
+
+        data_quality = "low"
+
+    else:
+
+        data_quality = "very_low"
+
+
+    # ========================================================
+    # RESULT
+    # ========================================================
 
     return {
 
@@ -520,11 +803,11 @@ def analyze_wellness(
                 2
             ),
 
-        "dataPoints":
-            len(sorted_records),
-
         "status":
             status,
+
+        "dataPoints":
+            len(records),
 
         "trends":
             trends,
@@ -532,9 +815,25 @@ def analyze_wellness(
         "changes":
             changes,
 
+        "averages":
+            averages,
+
         "signals":
             signals,
 
         "recommendations":
             recommendations,
+
+        "dataQuality":
+            {
+
+                "completeness":
+                    round(
+                        completeness,
+                        2
+                    ),
+
+                "level":
+                    data_quality,
+            },
     }
