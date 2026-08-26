@@ -4,13 +4,28 @@ import numpy as np
 
 
 # ============================================================
+# CONSTANTS
+# ============================================================
+
+MIN_SCORE = 0.0
+MAX_SCORE = 100.0
+
+
+# Maximum allowed projected change per day.
+#
+# This prevents a linear regression from producing unrealistic
+# long-range collapse/improvement from a small trend.
+MAX_DAILY_CHANGE = 0.35
+
+
+# ============================================================
 # CLAMP
 # ============================================================
 
 def clamp(
     value: float,
-    minimum: float = 0.0,
-    maximum: float = 100.0,
+    minimum: float = MIN_SCORE,
+    maximum: float = MAX_SCORE,
 ) -> float:
 
     return max(
@@ -19,67 +34,6 @@ def clamp(
             maximum,
             float(value),
         ),
-    )
-
-
-# ============================================================
-# SIMPLE LINEAR FORECAST
-# ============================================================
-
-def linear_forecast(
-    values: List[float],
-    days: int,
-) -> float:
-
-    if not values:
-
-        return 0.0
-
-
-    if len(values) < 2:
-
-        return round(
-            float(values[-1]),
-            2,
-        )
-
-
-    x = np.arange(
-        len(values),
-        dtype=float,
-    )
-
-    y = np.array(
-        values,
-        dtype=float,
-    )
-
-
-    slope, intercept = np.polyfit(
-        x,
-        y,
-        1,
-    )
-
-
-    future_x = (
-        len(values) - 1
-        + days
-    )
-
-
-    prediction = (
-        intercept
-        +
-        slope * future_x
-    )
-
-
-    return round(
-        clamp(
-            prediction
-        ),
-        2,
     )
 
 
@@ -99,18 +53,13 @@ def activity_score(
         or 0
     )
 
-
-    # 10,000 steps = 100
     score = (
         steps
         /
         10000.0
     ) * 100.0
 
-
-    return clamp(
-        score
-    )
+    return clamp(score)
 
 
 # ============================================================
@@ -129,34 +78,27 @@ def sleep_score(
         or 0
     )
 
-
     if sleep <= 0:
 
         return 0.0
 
-
-    # 7–9 hours treated as excellent.
+    # 8 hours is treated as the reference point.
     #
-    # 8 hours is the center.
-    # Every hour away reduces the score.
+    # This is a wellness heuristic, not a clinical score.
+
     score = (
         100.0
         -
         (
             abs(
-                sleep
-                -
-                8.0
+                sleep - 8.0
             )
             *
             18.0
         )
     )
 
-
-    return clamp(
-        score
-    )
+    return clamp(score)
 
 
 # ============================================================
@@ -175,32 +117,20 @@ def recovery_score(
         or 0
     )
 
-
     if resting_hr <= 0:
 
         return 0.0
 
-
-    # Lower resting HR is generally associated
-    # with better recovery, but this is only
-    # a wellness scoring heuristic.
     score = (
         100.0
         -
-        (
-            max(
-                0.0,
-                resting_hr
-                -
-                55.0,
-            )
+        max(
+            0.0,
+            resting_hr - 55.0,
         )
     )
 
-
-    return clamp(
-        score
-    )
+    return clamp(score)
 
 
 # ============================================================
@@ -219,7 +149,6 @@ def cardiovascular_score(
         or 0
     )
 
-
     resting_hr = float(
         record.get(
             "restingHeartRate",
@@ -228,22 +157,14 @@ def cardiovascular_score(
         or 0
     )
 
-
-    if (
-        heart_rate <= 0
-        and
-        resting_hr <= 0
-    ):
-
-        return 0.0
-
-
     scores = []
 
+    # --------------------------------------------------------
+    # Heart rate
+    # --------------------------------------------------------
 
     if heart_rate > 0:
 
-        # Broad wellness range heuristic.
         if 60 <= heart_rate <= 100:
 
             hr_score = 100.0
@@ -252,14 +173,10 @@ def cardiovascular_score(
 
             distance = min(
                 abs(
-                    heart_rate
-                    -
-                    60
+                    heart_rate - 60
                 ),
                 abs(
-                    heart_rate
-                    -
-                    100
+                    heart_rate - 100
                 ),
             )
 
@@ -267,9 +184,7 @@ def cardiovascular_score(
                 100.0
                 -
                 (
-                    distance
-                    *
-                    2.0
+                    distance * 2.0
                 )
             )
 
@@ -277,6 +192,9 @@ def cardiovascular_score(
             hr_score
         )
 
+    # --------------------------------------------------------
+    # Resting heart rate
+    # --------------------------------------------------------
 
     if resting_hr > 0:
 
@@ -286,11 +204,9 @@ def cardiovascular_score(
             )
         )
 
-
     if not scores:
 
         return 0.0
-
 
     return clamp(
         sum(scores)
@@ -315,32 +231,25 @@ def body_score(
         or 0
     )
 
-
     if bmi <= 0:
 
         return 0.0
 
-
-    # General wellness heuristic.
     if 18.5 <= bmi <= 24.9:
 
         return 100.0
-
 
     if 25.0 <= bmi <= 29.9:
 
         return 80.0
 
-
     if 17.0 <= bmi < 18.5:
 
         return 80.0
 
-
     if 30.0 <= bmi <= 34.9:
 
         return 60.0
-
 
     return 40.0
 
@@ -361,11 +270,9 @@ def oxygen_score(
         or 0
     )
 
-
     if oxygen <= 0:
 
         return 0.0
-
 
     return clamp(
         oxygen
@@ -406,60 +313,254 @@ def daily_wellness_score(
         record
     )
 
-
     # --------------------------------------------------------
-    # Same dimension structure used by wellness engine
+    # Match the wellness engine dimension weights
     # --------------------------------------------------------
 
     score = (
 
-        activity
-        *
-        0.20
+        activity * 0.20
 
         +
 
-        sleep
-        *
-        0.20
+        sleep * 0.20
 
         +
 
-        recovery
-        *
-        0.20
+        recovery * 0.20
 
         +
 
-        cardiovascular
-        *
-        0.20
+        cardiovascular * 0.20
 
         +
 
-        body
-        *
-        0.10
+        body * 0.10
 
         +
 
-        oxygen
-        *
-        0.10
+        oxygen * 0.10
+    )
 
+    return round(
+        clamp(score),
+        2,
     )
 
 
+# ============================================================
+# BUILD DAILY SCORES
+# ============================================================
+
+def build_daily_scores(
+    records: List[Dict[str, Any]],
+) -> List[float]:
+
+    return [
+        daily_wellness_score(
+            record
+        )
+        for record in records
+    ]
+
+
+# ============================================================
+# CALCULATE TREND
+# ============================================================
+
+def calculate_trend(
+    values: List[float],
+) -> Dict[str, float]:
+
+    if len(values) < 2:
+
+        return {
+            "slope": 0.0,
+            "r2": 0.0,
+        }
+
+    x = np.arange(
+        len(values),
+        dtype=float,
+    )
+
+    y = np.array(
+        values,
+        dtype=float,
+    )
+
+    slope, intercept = np.polyfit(
+        x,
+        y,
+        1,
+    )
+
+    predicted = (
+        intercept
+        +
+        slope * x
+    )
+
+    ss_res = np.sum(
+        (
+            y - predicted
+        ) ** 2
+    )
+
+    ss_tot = np.sum(
+        (
+            y - np.mean(y)
+        ) ** 2
+    )
+
+    if ss_tot <= 0:
+
+        r2 = 1.0
+
+    else:
+
+        r2 = (
+            1.0
+            -
+            (
+                ss_res
+                /
+                ss_tot
+            )
+        )
+
+    return {
+        "slope": float(slope),
+        "r2": float(
+            clamp(
+                r2,
+                0.0,
+                1.0,
+            )
+        ),
+    }
+
+
+# ============================================================
+# FORECAST FROM TREND
+# ============================================================
+
+def project_score(
+    current: float,
+    slope: float,
+    days: int,
+) -> float:
+
+    # --------------------------------------------------------
+    # Prevent unrealistic extrapolation
+    # --------------------------------------------------------
+
+    safe_slope = max(
+        -MAX_DAILY_CHANGE,
+        min(
+            MAX_DAILY_CHANGE,
+            slope,
+        ),
+    )
+
+    projected = (
+        current
+        +
+        (
+            safe_slope
+            *
+            days
+        )
+    )
+
     return round(
         clamp(
-            score
+            projected
         ),
         2,
     )
 
 
 # ============================================================
-# BUILD FORECAST
+# TRAJECTORY
+# ============================================================
+
+def determine_trajectory(
+    current: float,
+    forecast30: float,
+) -> str:
+
+    delta = (
+        forecast30
+        -
+        current
+    )
+
+    if delta >= 5:
+
+        return "strongly_improving"
+
+    if delta >= 2:
+
+        return "improving"
+
+    if delta <= -5:
+
+        return "strongly_declining"
+
+    if delta <= -2:
+
+        return "declining"
+
+    return "stable"
+
+
+# ============================================================
+# FORECAST CONFIDENCE
+# ============================================================
+
+def calculate_forecast_confidence(
+    record_count: int,
+    r2: float,
+) -> float:
+
+    if record_count >= 30:
+        coverage = 1.0
+    else:
+        coverage = min(
+            1.0,
+            record_count / 30.0,
+        )
+
+    trend_quality = max(
+        0.0,
+        min(
+            1.0,
+            r2,
+        )
+    )
+
+    confidence = (
+        coverage * 0.50
+        +
+        trend_quality * 0.30
+        +
+        0.20
+    )
+
+    # Keep forecast confidence below 95%.
+    confidence = min(
+        confidence,
+        0.95,
+    )
+
+    return round(
+        confidence * 100.0,
+        1,
+    )
+
+# ============================================================
+# FORECAST WELLBEING
 # ============================================================
 
 def forecast_wellbeing(
@@ -468,7 +569,7 @@ def forecast_wellbeing(
 ) -> Dict[str, Any]:
 
     # ========================================================
-    # NO RECORDS
+    # NO DATA
     # ========================================================
 
     if not records:
@@ -477,11 +578,10 @@ def forecast_wellbeing(
             float(
                 wellness.get(
                     "personalWellnessScore",
-                    0,
+                    0.0,
                 )
             )
         )
-
 
         return {
 
@@ -518,33 +618,35 @@ def forecast_wellbeing(
 
 
     # ========================================================
-    # DAILY SCORES
+    # SORT CHRONOLOGICALLY
     # ========================================================
 
-    daily_scores = []
+    records = sorted(
+        records,
+        key=lambda record:
+            str(
+                record.get(
+                    "date",
+                    "",
+                )
+            ),
+    )
 
 
-    for record in records:
+    # ========================================================
+    # DAILY WELLNESS SCORES
+    # ========================================================
 
-        score = (
-            daily_wellness_score(
-                record
-            )
+    daily_scores = (
+        build_daily_scores(
+            records
         )
-
-        daily_scores.append(
-            score
-        )
+    )
 
 
     # ========================================================
-    # CURRENT SCORE
+    # CURRENT WELLNESS
     # ========================================================
-
-    #
-    # Use the actual wellness engine score as the current
-    # reference point.
-    #
 
     current = clamp(
         float(
@@ -557,21 +659,56 @@ def forecast_wellbeing(
 
 
     # ========================================================
-    # FUTURE FORECASTS
+    # RECENT TREND
+    #
+    # Give more importance to recent behavior.
     # ========================================================
 
-    forecast7 = linear_forecast(
-        daily_scores,
+    if len(daily_scores) >= 14:
+
+        trend_values = (
+            daily_scores[-14:]
+        )
+
+    else:
+
+        trend_values = (
+            daily_scores
+        )
+
+
+    trend = calculate_trend(
+        trend_values
+    )
+
+    slope = trend[
+        "slope"
+    ]
+
+    r2 = trend[
+        "r2"
+    ]
+
+
+    # ========================================================
+    # FORECAST
+    # ========================================================
+
+    forecast7 = project_score(
+        current,
+        slope,
         7,
     )
 
-    forecast14 = linear_forecast(
-        daily_scores,
+    forecast14 = project_score(
+        current,
+        slope,
         14,
     )
 
-    forecast30 = linear_forecast(
-        daily_scores,
+    forecast30 = project_score(
+        current,
+        slope,
         30,
     )
 
@@ -580,58 +717,23 @@ def forecast_wellbeing(
     # TRAJECTORY
     # ========================================================
 
-    delta = (
-        forecast30
-        -
-        current
+    trajectory = (
+        determine_trajectory(
+            current,
+            forecast30,
+        )
     )
 
 
-    if delta >= 5:
-
-        trajectory = (
-            "strongly_improving"
-        )
-
-    elif delta >= 2:
-
-        trajectory = (
-            "improving"
-        )
-
-    elif delta <= -5:
-
-        trajectory = (
-            "strongly_declining"
-        )
-
-    elif delta <= -2:
-
-        trajectory = (
-            "declining"
-        )
-
-    else:
-
-        trajectory = (
-            "stable"
-        )
-
-
     # ========================================================
-    # DATA-BASED CONFIDENCE
+    # CONFIDENCE
     # ========================================================
 
-    record_count = len(
-        records
-    )
-
-
-    confidence = min(
-        100.0,
-        record_count
-        *
-        3.33,
+    confidence = (
+        calculate_forecast_confidence(
+            len(records),
+            r2,
+        )
     )
 
 
@@ -648,35 +750,36 @@ def forecast_wellbeing(
             ),
 
         "forecast7d":
-            round(
-                clamp(
-                    forecast7
-                ),
-                2,
-            ),
+            forecast7,
 
         "forecast14d":
-            round(
-                clamp(
-                    forecast14
-                ),
-                2,
-            ),
+            forecast14,
 
         "forecast30d":
-            round(
-                clamp(
-                    forecast30
-                ),
-                2,
-            ),
+            forecast30,
 
         "trajectory":
             trajectory,
 
         "confidence":
+            confidence,
+
+        # ----------------------------------------------------
+        # Additional transparent metadata
+        # ----------------------------------------------------
+
+        "trendSlope":
             round(
-                confidence,
-                1,
+                slope,
+                4,
             ),
+
+        "trendR2":
+            round(
+                r2,
+                4,
+            ),
+
+        "recordsUsed":
+            len(records),
     }
