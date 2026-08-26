@@ -546,6 +546,100 @@ def main():
             f"{weight}"
         )
 
+    # ========================================================
+    # EXPLAINABILITY
+    # ========================================================
+
+    explanation = result[
+        "explanation"
+    ]   
+
+
+    print()
+
+    print(
+        "EXPLAINABILITY"
+        )
+
+    print(
+        "-" * 70
+    )
+
+
+    print(
+        "Trend:"
+    )
+
+    print(
+        f"  {explanation['trendExplanation']}"
+    )
+
+
+    print()
+
+    print(
+        "Strongest Factors:"
+    )
+
+
+    for factor in (
+        explanation[
+            "positiveFactors"
+        ]
+    ):
+
+        print(
+            f"  ✓ "
+            f"{factor['label']}: "
+            f"{factor['score']} "
+            f"({factor['level']})"
+        )
+
+
+    print()
+
+    print(
+        "Attention Factors:"
+    )
+
+
+    if explanation[
+        "attentionFactors"
+    ]:
+
+        for factor in (
+            explanation[
+                "attentionFactors"
+            ]
+        ):
+
+            print(
+                f"  ! "
+                f"{factor['label']}: "
+                f"{factor['score']} "
+                f"({factor['level']})"
+            )
+
+    else:
+
+        print(
+            "  No major attention factors."
+        )
+
+
+    print()
+
+    print(
+        "Summary:"
+    )
+
+    print(
+        f"  {explanation['positiveSummary']}"
+    )
+
+    print(
+        f"  {explanation['attentionSummary']}"
+    )
 
     # ========================================================
     # SYSTEM INFORMATION

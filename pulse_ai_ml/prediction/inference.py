@@ -2,6 +2,10 @@ from typing import Any, Dict, List
 
 from .predictor import get_predictor
 
+from .explainability import (
+    explain_wellness,
+)
+
 from .score_engine import (
     build_score_response,
     calculate_overall_score,
@@ -26,7 +30,7 @@ def analyze_user(
 ) -> Dict[str, Any]:
 
     # ========================================================
-    # ML PREDICTION
+    # 1. ML PREDICTION
     # ========================================================
 
     predictor = get_predictor()
@@ -37,7 +41,7 @@ def analyze_user(
 
 
     # ========================================================
-    # ML BASELINE SCORES
+    # 2. ML BASELINE SCORES
     # ========================================================
 
     score_result = build_score_response(
@@ -64,7 +68,7 @@ def analyze_user(
 
 
     # ========================================================
-    # NORMALIZE HEALTH RECORDS
+    # 3. NORMALIZE PULSE AI HEALTH RECORDS
     # ========================================================
 
     normalized_records = (
@@ -75,7 +79,7 @@ def analyze_user(
 
 
     # ========================================================
-    # LONGITUDINAL WELLNESS
+    # 4. LONGITUDINAL WELLNESS ANALYSIS
     # ========================================================
 
     wellness = analyze_wellness(
@@ -94,7 +98,16 @@ def analyze_user(
 
 
     # ========================================================
-    # OVERALL WELLBEING
+    # 5. EXPLAINABILITY / EVIDENCE
+    # ========================================================
+
+    explanation = explain_wellness(
+        wellness
+    )
+
+
+    # ========================================================
+    # 6. OVERALL WELLBEING SCORE
     # ========================================================
 
     overall_wellbeing = (
@@ -110,10 +123,14 @@ def analyze_user(
 
 
     # ========================================================
-    # FINAL RESULT
+    # 7. FINAL RESULT
     # ========================================================
 
     return {
+
+        # ----------------------------------------------------
+        # NUMERICAL SCORES
+        # ----------------------------------------------------
 
         "scores": {
 
@@ -134,11 +151,19 @@ def analyze_user(
         },
 
 
+        # ----------------------------------------------------
+        # SCORE BANDS
+        # ----------------------------------------------------
+
         "bands":
             score_result[
                 "bands"
             ],
 
+
+        # ----------------------------------------------------
+        # RAW MODEL PROBABILITIES
+        # ----------------------------------------------------
 
         "modelProbabilities":
             score_result[
@@ -146,9 +171,27 @@ def analyze_user(
             ],
 
 
+        # ----------------------------------------------------
+        # LONGITUDINAL WELLNESS
+        # ----------------------------------------------------
+
         "wellness":
             wellness,
 
+
+        # ----------------------------------------------------
+        # EXPLAINABILITY
+        #
+        # This is the important addition.
+        # ----------------------------------------------------
+
+        "explanation":
+            explanation,
+
+
+        # ----------------------------------------------------
+        # DATA QUALITY
+        # ----------------------------------------------------
 
         "dataQuality":
             wellness[
@@ -156,13 +199,25 @@ def analyze_user(
             ],
 
 
+        # ----------------------------------------------------
+        # MODEL INFORMATION
+        # ----------------------------------------------------
+
         "modelVersion":
             "v2-deployment",
 
 
+        # ----------------------------------------------------
+        # BP DEPLOYMENT STATUS
+        # ----------------------------------------------------
+
         "bloodPressureUsed":
             False,
 
+
+        # ----------------------------------------------------
+        # RECORD COUNT
+        # ----------------------------------------------------
 
         "recordsAnalyzed":
             len(
