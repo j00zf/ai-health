@@ -14,11 +14,7 @@ ROOT = (
     .parents[1]
 )
 
-
-DATA_DIR = (
-    ROOT / "data"
-)
-
+DATA_DIR = ROOT / "data"
 
 OUTPUT_FILE = (
     DATA_DIR
@@ -27,29 +23,74 @@ OUTPUT_FILE = (
 
 
 # ============================================================
-# LOAD XPT
+# DEPLOYMENT FEATURES
+# ============================================================
+#
+# IMPORTANT:
+#
+# These are the ONLY features that the production Pulse AI
+# models are allowed to consume.
+#
+# Blood pressure is intentionally excluded because the
+# current Pulse AI HealthRecord does not require BP.
+#
+# ============================================================
+
+FEATURES = [
+
+    "age",
+    "sex",
+
+    "height_cm",
+    "weight_kg",
+    "bmi",
+    "waist_cm",
+
+    "heart_rate",
+
+    "activity_minutes",
+
+    "sleep_hours",
+
+    "smoking",
+    "alcohol",
+]
+
+
+# ============================================================
+# TARGETS
+# ============================================================
+
+TARGETS = [
+
+    "heart_outcome",
+
+    "health_outcome",
+
+    "wellness_outcome",
+]
+
+
+# ============================================================
+# LOAD NHANES XPT
 # ============================================================
 
 def load_xpt(filename):
 
-    path = (
-        DATA_DIR / filename
-    )
-
+    path = DATA_DIR / filename
 
     if not path.exists():
 
         raise FileNotFoundError(
-            f"\nMissing dataset:\n{path}\n\n"
-            "Run:\n"
-            "python training\\download_data.py"
+            f"\nMissing dataset:\n"
+            f"{path}\n\n"
+            f"Run:\n"
+            f"python training\\download_data.py"
         )
-
 
     print(
         f"Loading {filename}..."
     )
-
 
     return pd.read_sas(
         path,
@@ -58,7 +99,7 @@ def load_xpt(filename):
 
 
 # ============================================================
-# SAFE COLUMN
+# SAFE COLUMN ACCESS
 # ============================================================
 
 def get_column(
@@ -73,13 +114,11 @@ def get_column(
             errors="coerce"
         )
 
-
     print(
         f"[WARNING] "
         f"'{column}' not found. "
         f"Using NaN."
     )
-
 
     return pd.Series(
         np.nan,
@@ -98,7 +137,6 @@ def mean_columns(
 
     values = []
 
-
     for column in columns:
 
         if column in df.columns:
@@ -110,14 +148,12 @@ def mean_columns(
                 )
             )
 
-
     if not values:
 
         return pd.Series(
             np.nan,
             index=df.index
         )
-
 
     return pd.concat(
         values,
@@ -134,64 +170,56 @@ def mean_columns(
 
 def create_dataset():
 
-    # ========================================================
-    # LOAD
-    # ========================================================
-
     print(
-        "\nLoading NHANES datasets...\n"
+        "\n"
+        "======================================================\n"
+        "Loading NHANES datasets...\n"
+        "======================================================"
     )
 
+    # --------------------------------------------------------
+    # Load datasets
+    # --------------------------------------------------------
 
     demo = load_xpt(
         "P_DEMO.XPT"
     )
 
-
     bmx = load_xpt(
         "P_BMX.XPT"
     )
-
 
     bpx = load_xpt(
         "P_BPXO.XPT"
     )
 
-
     paq = load_xpt(
         "P_PAQ.XPT"
     )
-
 
     slq = load_xpt(
         "P_SLQ.XPT"
     )
 
-
     smq = load_xpt(
         "P_SMQ.XPT"
     )
-
 
     alq = load_xpt(
         "P_ALQ.XPT"
     )
 
-
     diq = load_xpt(
         "P_DIQ.XPT"
     )
-
 
     mcq = load_xpt(
         "P_MCQ.XPT"
     )
 
-
     bpq = load_xpt(
         "P_BPQ.XPT"
     )
-
 
     huq = load_xpt(
         "P_HUQ.XPT"
@@ -206,30 +234,20 @@ def create_dataset():
         "\nMerging datasets..."
     )
 
-
     datasets = [
 
         demo,
-
         bmx,
-
         bpx,
-
         paq,
-
         slq,
-
         smq,
-
         alq,
-
         diq,
-
         mcq,
-
         bpq,
-
         huq,
+
     ]
 
 
@@ -238,14 +256,16 @@ def create_dataset():
 
     for dataset in datasets[1:]:
 
-        # Only keep SEQN + unique columns
+        # Keep SEQN plus only columns not already present.
         columns = [
             "SEQN"
         ] + [
             column
             for column in dataset.columns
-            if column != "SEQN"
-            and column not in df.columns
+            if (
+                column != "SEQN"
+                and column not in df.columns
+            )
         ]
 
 
@@ -280,7 +300,7 @@ def create_dataset():
 
 
     # ========================================================
-    # BODY
+    # BODY MEASUREMENTS
     # ========================================================
 
     df["height_cm"] = get_column(
@@ -311,13 +331,18 @@ def create_dataset():
     # HEART RATE
     # ========================================================
     #
-    # P_BPXO uses:
+    # NHANES P_BPXO:
     #
     # BPXOPLS1
     # BPXOPLS2
     # BPXOPLS3
     #
-    # CDC identifies these as oscillometric pulse readings.
+    # These are the oscillometric pulse readings.
+    #
+    # We use them to create the training feature:
+    #
+    # heart_rate
+    #
     # ========================================================
 
     df["heart_rate"] = mean_columns(
@@ -333,36 +358,29 @@ def create_dataset():
     # ========================================================
     # BLOOD PRESSURE
     # ========================================================
-
-    df["systolic_bp"] = mean_columns(
-        df,
-        [
-            "BPXOSY1",
-            "BPXOSY2",
-            "BPXOSY3",
-        ]
-    )
-
-
-    df["diastolic_bp"] = mean_columns(
-        df,
-        [
-            "BPXODI1",
-            "BPXODI2",
-            "BPXODI3",
-        ]
-    )
+    #
+    # BP is deliberately NOT used as a model feature.
+    #
+    # We do NOT create systolic_bp or diastolic_bp in the
+    # final deployment dataset.
+    #
+    # This keeps training compatible with Pulse AI.
+    #
+    # ========================================================
 
 
     # ========================================================
     # PHYSICAL ACTIVITY
     # ========================================================
     #
-    # Create a normalized activity measure:
+    # Approximate weekly activity measure:
     #
-    # activity_minutes
+    # vigorous days × vigorous minutes
+    # +
+    # moderate days × moderate minutes
+    # +
+    # walking days × walking minutes
     #
-    # This replaces the old activity_days variable.
     # ========================================================
 
     vigorous_days = get_column(
@@ -402,29 +420,23 @@ def create_dataset():
 
 
     vigorous_activity = (
-        vigorous_days
-        .fillna(0)
+        vigorous_days.fillna(0)
         *
-        vigorous_minutes
-        .fillna(0)
+        vigorous_minutes.fillna(0)
     )
 
 
     moderate_activity = (
-        moderate_days
-        .fillna(0)
+        moderate_days.fillna(0)
         *
-        moderate_minutes
-        .fillna(0)
+        moderate_minutes.fillna(0)
     )
 
 
     walking_activity = (
-        walking_days
-        .fillna(0)
+        walking_days.fillna(0)
         *
-        walking_minutes
-        .fillna(0)
+        walking_minutes.fillna(0)
     )
 
 
@@ -455,7 +467,9 @@ def create_dataset():
 
     df["sleep_hours"] = (
         weekday_sleep
-        .fillna(weekend_sleep)
+        .fillna(
+            weekend_sleep
+        )
     )
 
 
@@ -511,12 +525,15 @@ def create_dataset():
     # HEART TARGET
     # ========================================================
     #
-    # Existing diagnosed cardiovascular conditions.
+    # Research target based on reported:
     #
-    # 1 = condition present
-    # 0 = none of the selected conditions reported
+    # - Heart failure
+    # - Coronary heart disease
+    # - Heart attack
+    # - Stroke
     #
-    # This is a research target, not a diagnosis.
+    # This is NOT a medical diagnosis.
+    #
     # ========================================================
 
     heart_failure = (
@@ -572,7 +589,14 @@ def create_dataset():
     # HEALTH TARGET
     # ========================================================
     #
-    # Cardiometabolic health outcome.
+    # Includes:
+    #
+    # - Diabetes
+    # - Hypertension diagnosis
+    # - Cardiovascular conditions
+    #
+    # Research target only.
+    #
     # ========================================================
 
     diabetes = (
@@ -615,23 +639,20 @@ def create_dataset():
     # ========================================================
     #
     # HUQ010:
-    # self-rated general health.
     #
-    # 1 = excellent
-    # 2 = very good
-    # 3 = good
-    # 4 = fair
-    # 5 = poor
+    # 1 = Excellent
+    # 2 = Very good
+    # 3 = Good
+    # 4 = Fair
+    # 5 = Poor
     #
-    # We create:
+    # We create a binary wellness target:
     #
-    # wellness_outcome = 1
-    # when general health is excellent/very good/good.
+    # 1 = Excellent / Very good / Good
+    # 0 = Fair / Poor
     #
-    # wellness_outcome = 0
-    # when fair/poor.
+    # This is a self-rated-health proxy.
     #
-    # This is a wellbeing proxy, not a clinical diagnosis.
     # ========================================================
 
     general_health = get_column(
@@ -659,51 +680,15 @@ def create_dataset():
 
 
     # ========================================================
-    # FEATURES
+    # SELECT DEPLOYMENT DATASET
     # ========================================================
-
-    FEATURES = [
-
-        "age",
-
-        "sex",
-
-        "height_cm",
-
-        "weight_kg",
-
-        "bmi",
-
-        "waist_cm",
-
-        "heart_rate",
-
-        "systolic_bp",
-
-        "diastolic_bp",
-
-        "activity_minutes",
-
-        "sleep_hours",
-
-        "smoking",
-
-        "alcohol",
-    ]
-
-
-    TARGETS = [
-
-        "heart_outcome",
-
-        "health_outcome",
-
-        "wellness_outcome",
-    ]
-
-
-    # ========================================================
-    # FINAL DATASET
+    #
+    # IMPORTANT:
+    #
+    # Only FEATURES + TARGETS are retained.
+    #
+    # BP cannot accidentally enter the model.
+    #
     # ========================================================
 
     final_columns = (
@@ -722,6 +707,8 @@ def create_dataset():
     # CLEAN VALUES
     # ========================================================
 
+    # Age
+
     df.loc[
         ~df["age"].between(
             18,
@@ -730,6 +717,8 @@ def create_dataset():
         "age"
     ] = np.nan
 
+
+    # Height
 
     df.loc[
         ~df["height_cm"].between(
@@ -740,6 +729,8 @@ def create_dataset():
     ] = np.nan
 
 
+    # Weight
+
     df.loc[
         ~df["weight_kg"].between(
             30,
@@ -748,6 +739,8 @@ def create_dataset():
         "weight_kg"
     ] = np.nan
 
+
+    # BMI
 
     df.loc[
         ~df["bmi"].between(
@@ -758,6 +751,8 @@ def create_dataset():
     ] = np.nan
 
 
+    # Waist
+
     df.loc[
         ~df["waist_cm"].between(
             40,
@@ -766,6 +761,8 @@ def create_dataset():
         "waist_cm"
     ] = np.nan
 
+
+    # Heart rate
 
     df.loc[
         ~df["heart_rate"].between(
@@ -776,23 +773,7 @@ def create_dataset():
     ] = np.nan
 
 
-    df.loc[
-        ~df["systolic_bp"].between(
-            60,
-            300
-        ),
-        "systolic_bp"
-    ] = np.nan
-
-
-    df.loc[
-        ~df["diastolic_bp"].between(
-            30,
-            200
-        ),
-        "diastolic_bp"
-    ] = np.nan
-
+    # Sleep
 
     df.loc[
         ~df["sleep_hours"].between(
@@ -802,6 +783,8 @@ def create_dataset():
         "sleep_hours"
     ] = np.nan
 
+
+    # Activity
 
     df.loc[
         df["activity_minutes"] < 0,
@@ -834,11 +817,9 @@ def create_dataset():
         + "=" * 70
     )
 
-
     print(
-        "PULSE AI TRAINING DATASET"
+        "PULSE AI DEPLOYMENT TRAINING DATASET"
     )
-
 
     print(
         "=" * 70
@@ -856,7 +837,7 @@ def create_dataset():
 
 
     print(
-        "\nFeatures:"
+        "\nDeployment features:"
     )
 
 
@@ -865,6 +846,21 @@ def create_dataset():
         print(
             f"  ✓ {feature}"
         )
+
+
+    print(
+        "\nExcluded from production model:"
+    )
+
+
+    print(
+        "  ✗ systolic_bp"
+    )
+
+
+    print(
+        "  ✗ diastolic_bp"
+    )
 
 
     print(
@@ -901,6 +897,16 @@ def create_dataset():
 
 
     print(
+        "\nFinal columns:"
+    )
+
+
+    print(
+        df.columns.tolist()
+    )
+
+
+    print(
         "\nSaved:"
     )
 
@@ -909,6 +915,15 @@ def create_dataset():
         OUTPUT_FILE
     )
 
+
+    print(
+        "\nDataset preparation complete."
+    )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
 

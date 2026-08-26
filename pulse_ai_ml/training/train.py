@@ -4,17 +4,11 @@ import json
 import joblib
 import pandas as pd
 
-from sklearn.model_selection import (
-    train_test_split
-)
+from sklearn.model_selection import train_test_split
 
-from sklearn.impute import (
-    SimpleImputer
-)
+from sklearn.impute import SimpleImputer
 
-from sklearn.pipeline import (
-    Pipeline
-)
+from sklearn.pipeline import Pipeline
 
 from sklearn.metrics import (
     roc_auc_score,
@@ -61,45 +55,38 @@ ARTIFACT_DIR = (
 
 
 MODEL_DIR.mkdir(
+    parents=True,
     exist_ok=True
 )
 
 
 ARTIFACT_DIR.mkdir(
+    parents=True,
     exist_ok=True
 )
 
 
 # ============================================================
-# FEATURES
+# DEPLOYMENT FEATURES
 # ============================================================
 
 FEATURES = [
 
     "age",
-
     "sex",
 
     "height_cm",
-
     "weight_kg",
-
     "bmi",
-
     "waist_cm",
 
     "heart_rate",
-
-    "systolic_bp",
-
-    "diastolic_bp",
 
     "activity_minutes",
 
     "sleep_hours",
 
     "smoking",
-
     "alcohol",
 ]
 
@@ -110,11 +97,31 @@ FEATURES = [
 
 TARGETS = {
 
-    "heart": "heart_outcome",
+    "heart":
+        "heart_outcome",
 
-    "health": "health_outcome",
+    "health":
+        "health_outcome",
 
-    "wellness": "wellness_outcome",
+    "wellness":
+        "wellness_outcome",
+}
+
+
+# ============================================================
+# MODEL FILES
+# ============================================================
+
+MODEL_FILES = {
+
+    "heart":
+        "pulse_heart_v2_deployment.joblib",
+
+    "health":
+        "pulse_health_v2_deployment.joblib",
+
+    "wellness":
+        "pulse_wellness_v2_deployment.joblib",
 }
 
 
@@ -125,7 +132,7 @@ TARGETS = {
 def train_model(
     df,
     target_name,
-    model_name
+    model_name,
 ):
 
     print(
@@ -145,7 +152,7 @@ def train_model(
 
 
     # --------------------------------------------------------
-    # Remove missing target
+    # Remove rows with unavailable target
     # --------------------------------------------------------
 
     data = df.dropna(
@@ -157,7 +164,7 @@ def train_model(
 
     X = data[
         FEATURES
-    ]
+    ].copy()
 
 
     y = (
@@ -171,6 +178,18 @@ def train_model(
     print(
         f"\nRows: {len(data):,}"
     )
+
+
+    print(
+        "\nFeatures:"
+    )
+
+
+    for feature in FEATURES:
+
+        print(
+            f"  ✓ {feature}"
+        )
 
 
     print(
@@ -198,7 +217,32 @@ def train_model(
 
 
     # --------------------------------------------------------
-    # Split
+    # Missingness
+    # --------------------------------------------------------
+
+    print(
+        "\nFeature missingness:"
+    )
+
+
+    missingness = (
+        X.isna()
+        .mean()
+        .mul(100)
+        .round(2)
+        .sort_values(
+            ascending=False
+        )
+    )
+
+
+    print(
+        missingness
+    )
+
+
+    # --------------------------------------------------------
+    # Train / test split
     # --------------------------------------------------------
 
     X_train, X_test, y_train, y_test = (
@@ -218,7 +262,7 @@ def train_model(
 
 
     # --------------------------------------------------------
-    # Class balance
+    # Class imbalance
     # --------------------------------------------------------
 
     positive = (
@@ -237,6 +281,15 @@ def train_model(
         max(
             positive,
             1
+        )
+    )
+
+
+    print(
+        "\nClass weight:",
+        round(
+            scale_pos_weight,
+            4
         )
     )
 
@@ -287,9 +340,7 @@ def train_model(
             "imputer",
 
             SimpleImputer(
-
                 strategy="median",
-
                 add_indicator=True
             )
         ),
@@ -303,14 +354,23 @@ def train_model(
     ])
 
 
+    # --------------------------------------------------------
+    # Train
+    # --------------------------------------------------------
+
     print(
-        "\nTraining..."
+        "\nTraining XGBoost..."
     )
 
 
     pipeline.fit(
         X_train,
         y_train
+    )
+
+
+    print(
+        "Training complete."
     )
 
 
@@ -337,71 +397,89 @@ def train_model(
 
     metrics = {
 
-        "model": model_name,
+        "model":
+            model_name,
 
-        "target": target_name,
+        "version":
+            "v2-deployment",
 
-        "features": FEATURES,
+        "target":
+            target_name,
 
-        "train_rows": int(
-            len(X_train)
-        ),
+        "blood_pressure_used":
+            False,
 
-        "test_rows": int(
-            len(X_test)
-        ),
+        "features":
+            FEATURES,
 
-        "roc_auc": float(
-            roc_auc_score(
-                y_test,
-                probabilities
-            )
-        ),
+        "train_rows":
+            int(
+                len(X_train)
+            ),
 
-        "average_precision": float(
-            average_precision_score(
-                y_test,
-                probabilities
-            )
-        ),
+        "test_rows":
+            int(
+                len(X_test)
+            ),
 
-        "accuracy": float(
-            accuracy_score(
-                y_test,
-                predictions
-            )
-        ),
+        "roc_auc":
+            float(
+                roc_auc_score(
+                    y_test,
+                    probabilities
+                )
+            ),
 
-        "precision": float(
-            precision_score(
-                y_test,
-                predictions,
-                zero_division=0
-            )
-        ),
+        "average_precision":
+            float(
+                average_precision_score(
+                    y_test,
+                    probabilities
+                )
+            ),
 
-        "recall": float(
-            recall_score(
-                y_test,
-                predictions,
-                zero_division=0
-            )
-        ),
+        "accuracy":
+            float(
+                accuracy_score(
+                    y_test,
+                    predictions
+                )
+            ),
 
-        "f1": float(
-            f1_score(
-                y_test,
-                predictions,
-                zero_division=0
-            )
-        ),
+        "precision":
+            float(
+                precision_score(
+                    y_test,
+                    predictions,
+                    zero_division=0
+                )
+            ),
 
-        "brier_score": float(
-            brier_score_loss(
-                y_test,
-                probabilities
-            )
-        ),
+        "recall":
+            float(
+                recall_score(
+                    y_test,
+                    predictions,
+                    zero_division=0
+                )
+            ),
+
+        "f1":
+            float(
+                f1_score(
+                    y_test,
+                    predictions,
+                    zero_division=0
+                )
+            ),
+
+        "brier_score":
+            float(
+                brier_score_loss(
+                    y_test,
+                    probabilities
+                )
+            ),
 
         "confusion_matrix":
             confusion_matrix(
@@ -412,13 +490,21 @@ def train_model(
 
 
     # --------------------------------------------------------
-    # Save
+    # Save model
     # --------------------------------------------------------
+
+    model_key = (
+        model_name
+        .lower()
+    )
+
 
     model_path = (
         MODEL_DIR
         /
-        f"pulse_{model_name.lower()}_v1.joblib"
+        MODEL_FILES[
+            model_key
+        ]
     )
 
 
@@ -427,6 +513,10 @@ def train_model(
         model_path
     )
 
+
+    # --------------------------------------------------------
+    # Report
+    # --------------------------------------------------------
 
     print(
         "\nMetrics:"
@@ -476,7 +566,20 @@ def train_model(
 
 
     print(
-        f"\nSaved:"
+        "\nConfusion Matrix:"
+    )
+
+
+    print(
+        confusion_matrix(
+            y_test,
+            predictions
+        )
+    )
+
+
+    print(
+        "\nSaved:"
     )
 
 
@@ -487,13 +590,13 @@ def train_model(
 
     return {
 
-        "pipeline": pipeline,
+        "metrics":
+            metrics,
 
-        "metrics": metrics,
-
-        "model_path": str(
-            model_path
-        ),
+        "model_path":
+            str(
+                model_path
+            ),
     }
 
 
@@ -504,18 +607,34 @@ def train_model(
 def main():
 
     print(
-        "\nLoading training dataset..."
+        "\n"
+        "============================================================\n"
+        "PULSE AI DEPLOYMENT-COMPATIBLE ML TRAINING\n"
+        "============================================================"
     )
 
+
+    # --------------------------------------------------------
+    # Check dataset
+    # --------------------------------------------------------
 
     if not DATA_FILE.exists():
 
         raise FileNotFoundError(
             f"\nDataset not found:\n"
             f"{DATA_FILE}\n\n"
-            "Run:\n"
-            "python training\\prepare_dataset.py"
+            f"Run:\n"
+            f"python training\\prepare_dataset.py"
         )
+
+
+    # --------------------------------------------------------
+    # Load
+    # --------------------------------------------------------
+
+    print(
+        "\nLoading training dataset..."
+    )
 
 
     df = pd.read_parquet(
@@ -529,12 +648,15 @@ def main():
 
 
     # --------------------------------------------------------
-    # Verify features
+    # Validate features
     # --------------------------------------------------------
 
     missing_features = [
+
         feature
+
         for feature in FEATURES
+
         if feature not in df.columns
     ]
 
@@ -542,7 +664,7 @@ def main():
     if missing_features:
 
         raise ValueError(
-            "\nMissing features:\n"
+            "\nMissing deployment features:\n"
             +
             "\n".join(
                 f"  - {feature}"
@@ -552,10 +674,58 @@ def main():
 
 
     # --------------------------------------------------------
-    # Train all three models
+    # Explicit BP safety check
     # --------------------------------------------------------
 
+    if "systolic_bp" in FEATURES:
+
+        raise RuntimeError(
+            "systolic_bp is forbidden "
+            "in the deployment model."
+        )
+
+
+    if "diastolic_bp" in FEATURES:
+
+        raise RuntimeError(
+            "diastolic_bp is forbidden "
+            "in the deployment model."
+        )
+
+
+    print(
+        "\nDeployment feature set:"
+    )
+
+
+    for feature in FEATURES:
+
+        print(
+            f"  ✓ {feature}"
+        )
+
+
+    print(
+        "\nBP dependency:"
+    )
+
+
+    print(
+        "  ✗ systolic_bp"
+    )
+
+
+    print(
+        "  ✗ diastolic_bp"
+    )
+
+
+    # ========================================================
+    # TRAIN HEART
+    # ========================================================
+
     heart = train_model(
+
         df,
 
         TARGETS["heart"],
@@ -564,7 +734,12 @@ def main():
     )
 
 
+    # ========================================================
+    # TRAIN HEALTH
+    # ========================================================
+
     health = train_model(
+
         df,
 
         TARGETS["health"],
@@ -573,7 +748,12 @@ def main():
     )
 
 
+    # ========================================================
+    # TRAIN WELLNESS
+    # ========================================================
+
     wellness = train_model(
+
         df,
 
         TARGETS["wellness"],
@@ -583,13 +763,22 @@ def main():
 
 
     # ========================================================
-    # MODEL METADATA
+    # SAVE METADATA
     # ========================================================
 
     metadata = {
 
+        "project":
+            "Pulse AI",
+
         "version":
-            "pulse-health-wellness-v1",
+            "pulse-health-wellness-v2",
+
+        "deployment_compatible":
+            True,
+
+        "blood_pressure_used":
+            False,
 
         "dataset":
             "NHANES 2017-March 2020",
@@ -597,62 +786,62 @@ def main():
         "features":
             FEATURES,
 
+        "targets":
+            TARGETS,
+
         "models": {
 
-            "heart": {
-                "target":
-                    TARGETS["heart"],
+            "heart":
+                heart["model_path"],
 
-                "artifact":
-                    heart["model_path"],
-            },
+            "health":
+                health["model_path"],
 
-            "health": {
-                "target":
-                    TARGETS["health"],
-
-                "artifact":
-                    health["model_path"],
-            },
-
-            "wellness": {
-                "target":
-                    TARGETS["wellness"],
-
-                "artifact":
-                    wellness["model_path"],
-            },
+            "wellness":
+                wellness["model_path"],
         },
 
-        "score_definition": {
+        "output_scores": [
 
-            "heart_health_score":
-                "100 * (1 - heart risk probability)",
+            "heartHealthScore",
 
-            "health_score":
-                "100 * (1 - health risk probability)",
+            "healthScore",
 
-            "wellness_score":
-                "100 * favorable wellness probability",
+            "wellnessScore",
 
-            "overall_score":
-                "weighted combination of heart, health and wellness",
+            "overallWellbeingScore",
+        ],
+
+        "score_semantics": {
+
+            "heartHealthScore":
+                "Higher indicates a more favorable "
+                "model-based cardiovascular outcome profile.",
+
+            "healthScore":
+                "Higher indicates a more favorable "
+                "model-based cardiometabolic health profile.",
+
+            "wellnessScore":
+                "Higher indicates a higher probability "
+                "of favorable self-rated general health.",
+
+            "overallWellbeingScore":
+                "Combined product-level score generated "
+                "from the three dimensions and personal "
+                "longitudinal wellness signals.",
         },
 
-        "disclaimer":
-            "Research/decision-support scores. "
-            "Not medical diagnoses."
+        "important_note":
+            "These models are research and decision-support "
+            "models and are not medical diagnostic tools.",
     }
 
-
-    # --------------------------------------------------------
-    # Save metadata
-    # --------------------------------------------------------
 
     metadata_path = (
         ARTIFACT_DIR
         /
-        "model_metadata.json"
+        "deployment_model_metadata.json"
     )
 
 
@@ -664,24 +853,27 @@ def main():
     )
 
 
-    # --------------------------------------------------------
-    # Save metrics
-    # --------------------------------------------------------
+    # ========================================================
+    # SAVE METRICS
+    # ========================================================
 
     metrics = {
 
-        "heart": heart["metrics"],
+        "heart":
+            heart["metrics"],
 
-        "health": health["metrics"],
+        "health":
+            health["metrics"],
 
-        "wellness": wellness["metrics"],
+        "wellness":
+            wellness["metrics"],
     }
 
 
     metrics_path = (
         ARTIFACT_DIR
         /
-        "training_metrics.json"
+        "deployment_training_metrics.json"
     )
 
 
@@ -704,7 +896,7 @@ def main():
 
 
     print(
-        "PULSE AI MULTI-MODEL TRAINING COMPLETE"
+        "DEPLOYMENT-COMPATIBLE TRAINING COMPLETE"
     )
 
 
@@ -714,27 +906,37 @@ def main():
 
 
     print(
-        "\nModels:"
+        "\n❤️ Heart model:"
     )
 
 
     print(
-        "  ❤️  Heart Health Model"
+        heart["model_path"]
     )
 
 
     print(
-        "  🏥 Health Model"
+        "\n🏥 Health model:"
     )
 
 
     print(
-        "  🌿 Wellness Model"
+        health["model_path"]
     )
 
 
     print(
-        "\nArtifacts:"
+        "\n🌿 Wellness model:"
+    )
+
+
+    print(
+        wellness["model_path"]
+    )
+
+
+    print(
+        "\nMetadata:"
     )
 
 
@@ -744,9 +946,18 @@ def main():
 
 
     print(
+        "\nMetrics:"
+    )
+
+
+    print(
         metrics_path
     )
 
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
 
