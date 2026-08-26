@@ -1,7 +1,0 @@
-[
-  {
-    "model":"pulse_ai_advanced_xgboost_v1",
-    "selection_method":"validation_max_f1",
-    "threshold":0.34
-  }
-]
