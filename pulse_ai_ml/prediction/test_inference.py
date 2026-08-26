@@ -642,6 +642,76 @@ def main():
     )
 
     # ========================================================
+    # RECOMMENDATIONS
+    # ========================================================
+
+    recommendation_result = result[
+        "recommendations"
+    ]
+
+
+    print()
+
+    print(
+        "PERSONALIZED RECOMMENDATIONS"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+    print(
+        "Overall:"
+    )
+
+    print(
+        f"  {recommendation_result['overallMessage']}"
+    )
+
+
+    print()
+
+    print(
+        "Trend:"
+    )
+
+    print(
+        f"  {recommendation_result['trendMessage']}"
+    )
+
+
+    print()
+
+    for recommendation in (
+        recommendation_result[
+            "recommendations"
+        ]
+    ):
+
+        print(
+            f"[{recommendation['priority'].upper()}] "
+            f"{recommendation['label']}"
+        )
+
+        print(
+            f"  Reason : "
+            f"{recommendation['reason']}"
+        )
+
+        print(
+            f"  Action : "
+            f"{recommendation['action']}"
+        )
+
+        print(
+            f"  Goal   : "
+            f"{recommendation['goal']}"
+        )
+
+        print()
+
+    # ========================================================
     # SYSTEM INFORMATION
     # ========================================================
 

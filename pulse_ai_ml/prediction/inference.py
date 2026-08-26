@@ -6,6 +6,10 @@ from .explainability import (
     explain_wellness,
 )
 
+from .recommendation_engine import (
+    generate_recommendations,
+)
+
 from .score_engine import (
     build_score_response,
     calculate_overall_score,
@@ -68,7 +72,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 3. NORMALIZE PULSE AI HEALTH RECORDS
+    # 3. NORMALIZE HEALTH RECORDS
     # ========================================================
 
     normalized_records = (
@@ -107,7 +111,21 @@ def analyze_user(
 
 
     # ========================================================
-    # 6. OVERALL WELLBEING SCORE
+    # 6. PERSONALIZED RECOMMENDATIONS
+    # ========================================================
+
+    recommendations = (
+        generate_recommendations(
+
+            wellness,
+
+            explanation,
+        )
+    )
+
+
+    # ========================================================
+    # 7. OVERALL WELLBEING SCORE
     # ========================================================
 
     overall_wellbeing = (
@@ -123,13 +141,13 @@ def analyze_user(
 
 
     # ========================================================
-    # 7. FINAL RESULT
+    # 8. FINAL RESULT
     # ========================================================
 
     return {
 
         # ----------------------------------------------------
-        # NUMERICAL SCORES
+        # SCORES
         # ----------------------------------------------------
 
         "scores": {
@@ -162,7 +180,7 @@ def analyze_user(
 
 
         # ----------------------------------------------------
-        # RAW MODEL PROBABILITIES
+        # MODEL PROBABILITIES
         # ----------------------------------------------------
 
         "modelProbabilities":
@@ -181,12 +199,18 @@ def analyze_user(
 
         # ----------------------------------------------------
         # EXPLAINABILITY
-        #
-        # This is the important addition.
         # ----------------------------------------------------
 
         "explanation":
             explanation,
+
+
+        # ----------------------------------------------------
+        # PERSONALIZED RECOMMENDATIONS
+        # ----------------------------------------------------
+
+        "recommendations":
+            recommendations,
 
 
         # ----------------------------------------------------
@@ -208,7 +232,7 @@ def analyze_user(
 
 
         # ----------------------------------------------------
-        # BP DEPLOYMENT STATUS
+        # BLOOD PRESSURE STATUS
         # ----------------------------------------------------
 
         "bloodPressureUsed":
