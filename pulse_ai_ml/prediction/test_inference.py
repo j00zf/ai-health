@@ -710,7 +710,128 @@ def main():
         )
 
         print()
+    # ========================================================
+    # AI INTERPRETATION
+    # ========================================================
 
+    ai_result = result[
+        "aiInterpretation"
+    ]
+
+
+    print()
+
+    print(
+        "AI WELLBEING INTERPRETATION"
+    )
+
+    print(
+        "-" * 70
+    )
+
+
+
+    print()
+
+    print(
+        "SUMMARY"
+    )
+
+    print(
+        ai_result[
+            "summary"
+        ]
+    )   
+
+
+    print()
+
+    print(
+        "STRENGTHS"
+    )
+
+    for strength in (
+        ai_result[
+            "strengths"
+        ]
+    ):
+
+        print(
+            f"  ✓ {strength}"
+        )
+
+
+    print()
+
+    print(
+        "OPPORTUNITIES"
+    )
+
+    for opportunity in (
+        ai_result[
+            "opportunities"
+        ]
+    ):
+
+        print(
+            f"  • {opportunity}"
+        )
+
+
+    print()
+
+    print(
+        "ACTIONS"
+    )
+
+    for action in (
+        ai_result[
+            "actions"
+        ]
+    ):
+
+        print(
+            f"  → {action}"
+        )
+
+
+    print()
+
+    print(
+        "NARRATIVE"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    print(
+        ai_result[
+            "narrative"
+        ]
+    )
+
+
+    print()
+
+    print(
+        "AI METADATA"
+    )
+
+    print(
+        f"Provider        : "
+        f"{ai_result['provider']}"
+    )
+
+    print(
+        f"Grounded        : "
+        f"{ai_result['grounded']}"
+    )
+
+    print(
+        f"Medical Diagnosis: "
+        f"{ai_result['medicalDiagnosis']}"
+    )
     # ========================================================
     # SYSTEM INFORMATION
     # ========================================================

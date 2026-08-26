@@ -23,6 +23,14 @@ from .wellness_engine import (
     analyze_wellness,
 )
 
+from .ai_context import (
+    build_ai_context,
+)
+
+from .ai_interpreter import (
+    get_interpreter,
+)
+
 
 # ============================================================
 # ANALYZE USER
@@ -83,7 +91,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 4. LONGITUDINAL WELLNESS ANALYSIS
+    # 4. LONGITUDINAL WELLNESS
     # ========================================================
 
     wellness = analyze_wellness(
@@ -102,7 +110,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 5. EXPLAINABILITY / EVIDENCE
+    # 5. EXPLAINABILITY
     # ========================================================
 
     explanation = explain_wellness(
@@ -111,7 +119,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 6. PERSONALIZED RECOMMENDATIONS
+    # 6. RECOMMENDATIONS
     # ========================================================
 
     recommendations = (
@@ -125,7 +133,7 @@ def analyze_user(
 
 
     # ========================================================
-    # 7. OVERALL WELLBEING SCORE
+    # 7. OVERALL WELLBEING
     # ========================================================
 
     overall_wellbeing = (
@@ -141,14 +149,10 @@ def analyze_user(
 
 
     # ========================================================
-    # 8. FINAL RESULT
+    # 8. BASE ANALYSIS OBJECT
     # ========================================================
 
-    return {
-
-        # ----------------------------------------------------
-        # SCORES
-        # ----------------------------------------------------
+    base_analysis = {
 
         "scores": {
 
@@ -168,80 +172,101 @@ def analyze_user(
                 overall_wellbeing,
         },
 
-
-        # ----------------------------------------------------
-        # SCORE BANDS
-        # ----------------------------------------------------
-
-        "bands":
-            score_result[
-                "bands"
-            ],
-
-
-        # ----------------------------------------------------
-        # MODEL PROBABILITIES
-        # ----------------------------------------------------
-
         "modelProbabilities":
             score_result[
                 "probabilities"
             ],
 
-
-        # ----------------------------------------------------
-        # LONGITUDINAL WELLNESS
-        # ----------------------------------------------------
-
         "wellness":
             wellness,
-
-
-        # ----------------------------------------------------
-        # EXPLAINABILITY
-        # ----------------------------------------------------
 
         "explanation":
             explanation,
 
-
-        # ----------------------------------------------------
-        # PERSONALIZED RECOMMENDATIONS
-        # ----------------------------------------------------
-
         "recommendations":
             recommendations,
-
-
-        # ----------------------------------------------------
-        # DATA QUALITY
-        # ----------------------------------------------------
 
         "dataQuality":
             wellness[
                 "dataQuality"
             ],
 
+        "modelVersion":
+            "v2-deployment",
 
-        # ----------------------------------------------------
-        # MODEL INFORMATION
-        # ----------------------------------------------------
+        "bloodPressureUsed":
+            False,
+    }
+
+
+    # ========================================================
+    # 9. AI CONTEXT
+    # ========================================================
+
+    ai_context = build_ai_context(
+        base_analysis
+    )
+
+
+    # ========================================================
+    # 10. AI INTERPRETATION
+    # ========================================================
+
+    interpreter = get_interpreter()
+
+    ai_interpretation = (
+        interpreter.interpret(
+            ai_context
+        )
+    )
+
+
+    # ========================================================
+    # 11. FINAL RESULT
+    # ========================================================
+
+    return {
+
+        "scores":
+            base_analysis[
+                "scores"
+            ],
+
+        "bands":
+            score_result[
+                "bands"
+            ],
+
+        "modelProbabilities":
+            score_result[
+                "probabilities"
+            ],
+
+        "wellness":
+            wellness,
+
+        "explanation":
+            explanation,
+
+        "recommendations":
+            recommendations,
+
+        "aiContext":
+            ai_context,
+
+        "aiInterpretation":
+            ai_interpretation,
+
+        "dataQuality":
+            wellness[
+                "dataQuality"
+            ],
 
         "modelVersion":
             "v2-deployment",
 
-
-        # ----------------------------------------------------
-        # BLOOD PRESSURE STATUS
-        # ----------------------------------------------------
-
         "bloodPressureUsed":
             False,
-
-
-        # ----------------------------------------------------
-        # RECORD COUNT
-        # ----------------------------------------------------
 
         "recordsAnalyzed":
             len(
