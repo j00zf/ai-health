@@ -15,6 +15,10 @@ import '../../core/services/health_background_sync.dart';
 import '../onboarding&account/user_account_screen.dart';
 import '../auth/welcome_screen.dart';
 import '../../features/cv/cv_analysis_screen.dart';
+import '../../features/ml/ml_health_dashboard_screen.dart';
+import '../../features/ml/ml_health_history_screen.dart';
+import '../../features/ml/ml_health_details_screen.dart';
+import '../../core/services/ml_health_service.dart';
 
 /// Unified application dashboard.
 ///
@@ -51,6 +55,9 @@ class _DashboardScreenState
   Map<String, dynamic>? dashboard;
 
   List<Map<String, dynamic>> healthRecords = [];
+  Map<String, dynamic>? _mlAnalysis;
+  bool _mlLoading = false;
+  String? _mlError;
 
   Map<String, dynamic>? latestHealthRecord;
 
@@ -69,28 +76,79 @@ class _DashboardScreenState
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
 
     _initializeHealthAndDashboard();
 
-    // Sync checks are now hourly, not every five minutes. The check first
-    // consults MongoDB sync points; Google Health is only queried when a
-    // daily/weekly/monthly point is due.
     _healthRefreshTimer = Timer.periodic(
       const Duration(hours: 1),
       (_) => _maybeAutomaticHealthSync(),
     );
   }
 
+  Future<void> _loadMlHealthAnalysis() async {
+    if (_mlLoading) return;
+
+    if (mounted) {
+      setState(() {
+        _mlLoading = true;
+        _mlError = null;
+      });
+    }
+
+    try {
+      final result = await MlHealthService.getLatestAnalysis(
+        token: widget.token,
+      );
+
+      if (!mounted) return;
+
+      final rawData = result['data'];
+
+      if (result['success'] == true && rawData is Map) {
+        setState(() {
+          _mlAnalysis = Map<String, dynamic>.from(rawData);
+          _mlLoading = false;
+        });
+      } else {
+        setState(() {
+          _mlAnalysis = null;
+          _mlLoading = false;
+
+          _mlError = result['message']?.toString() ??
+              'No ML health analysis available yet.';
+        });
+      }
+    } catch (e) {
+      debugPrint('[Dashboard] ML health load error: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _mlLoading = false;
+        _mlError = 'Unable to load ML health analysis.';
+      });
+    }
+  }
+
   Future<void> _initializeHealthAndDashboard() async {
     await HealthService.initialize();
-    await loadDashboard();
+
+    await Future.wait([
+      loadDashboard(),
+      _loadMlHealthAnalysis(),
+    ]);
+
     await _maybeAutomaticHealthSync();
 
-    // Once MongoDB already has a baseline, keep the recurring worker enabled
-    // across future app launches.
     if (HealthService.isConnected) {
       await HealthBackgroundSync.ensureScheduled();
+
+      await loadHealthOverview();
+
+      // Reload ML analysis after health data is available.
+      await _loadMlHealthAnalysis();
     }
   }
 
@@ -295,6 +353,8 @@ class _DashboardScreenState
     }
 
     await loadHealthOverview();
+
+    await _loadMlHealthAnalysis();
   }
 
   // ===========================================================================
@@ -523,6 +583,70 @@ class _DashboardScreenState
   }
 
   // ===========================================================================
+  // ML HEALTH NAVIGATION
+  // ===========================================================================
+
+  Future<void> _openMlHealthDashboard() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MlHealthDashboardScreen(
+          token: widget.token,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await _loadMlHealthAnalysis();
+  }
+
+  Future<void> _openMlHealthDetails() async {
+    // The details screen requires a concrete analysis payload. Refresh it
+    // first so sidebar navigation always uses the latest available analysis.
+    if (_mlAnalysis == null) {
+      await _loadMlHealthAnalysis();
+    }
+
+    if (!mounted) return;
+
+    if (_mlAnalysis == null) {
+      // No analysis is available yet. Open the ML dashboard so its existing
+      // loading, empty-state and retry functionality remains available.
+      await _openMlHealthDashboard();
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MlHealthDetailsScreen(
+          analysis: _mlAnalysis!,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await _loadMlHealthAnalysis();
+  }
+
+  Future<void> _openMlHealthHistory() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MlHealthHistoryScreen(
+          token: widget.token,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await _loadMlHealthAnalysis();
+  }
+
+  // ===========================================================================
   // NUMBER HELPERS
   // ===========================================================================
 
@@ -739,10 +863,11 @@ class _DashboardScreenState
       backgroundColor:
           const Color(0xfff4f7f6),
 
-    drawer: HealthSidebar(
+      drawer: HealthSidebar(
   user: user,
   profile: profile,
   healthConnected: healthConnected,
+  token: widget.token,
 
   onDashboard: () {},
 
@@ -756,6 +881,12 @@ class _DashboardScreenState
   onAllHealthHistory: _openAllRecords,
 
   onSyncHealth: _refreshAll,
+
+  onMlHealthDashboard: _openMlHealthDashboard,
+
+  onMlHealthDetails: _openMlHealthDetails,
+
+  onMlHealthHistory: _openMlHealthHistory,
 
   onLogout: _handleLogout,
 ),
@@ -907,6 +1038,16 @@ class _DashboardScreenState
               ),
 
               // ===============================================================
+              // PULSE AI ML HEALTH
+              // ===============================================================
+
+              _buildMlHealthSection(),
+
+              const SizedBox(
+                height: 28,
+              ),
+
+              // ===============================================================
               // GOOGLE HEALTH
               // ===============================================================
 
@@ -986,9 +1127,16 @@ class _DashboardScreenState
 
   Future<void> _refreshAll() async {
     await loadDashboard();
+
     if (HealthService.isConnected) {
-      await _openHealthSyncScreen(force: true);
+      await _openHealthSyncScreen(
+        force: true,
+      );
     }
+
+    await loadHealthOverview();
+
+    await _loadMlHealthAnalysis();
   }
 
   // ===========================================================================
@@ -1127,6 +1275,534 @@ class _DashboardScreenState
                         "activityLevel"]
                     ?.toString() ??
                 "-",
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ML HEALTH SECTION
+  // ===========================================================================
+
+  Widget _buildMlHealthSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xff6c5ce7).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.psychology_rounded,
+                color: Color(0xff6c5ce7),
+                size: 24,
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pulse AI Health Intelligence',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+
+                  SizedBox(height: 3),
+
+                  Text(
+                    'Personalized wellness analysis and trends',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            IconButton(
+              tooltip: 'Refresh ML analysis',
+              onPressed: _mlLoading
+                  ? null
+                  : _loadMlHealthAnalysis,
+              icon: const Icon(
+                Icons.refresh_rounded,
+                color: Color(0xff6c5ce7),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 14),
+
+        if (_mlLoading)
+          _buildMlLoadingCard()
+        else if (_mlAnalysis != null)
+          _buildMlAnalysisCard()
+        else
+          _buildMlEmptyCard(),
+      ],
+    );
+  }
+
+  Widget _buildMlLoadingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Column(
+        children: [
+          CircularProgressIndicator(
+            color: Color(0xff6c5ce7),
+          ),
+
+          SizedBox(height: 14),
+
+          Text(
+            'Analyzing your health data...',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMlAnalysisCard() {
+    final analysis = _mlAnalysis ?? {};
+
+    final rawScores = analysis['scores'];
+
+    final scores = rawScores is Map
+        ? Map<String, dynamic>.from(rawScores)
+        : <String, dynamic>{};
+
+    final rawWellness = analysis['wellness'];
+
+    final wellness = rawWellness is Map
+        ? Map<String, dynamic>.from(rawWellness)
+        : <String, dynamic>{};
+
+    final rawQuality = analysis['dataQuality'];
+
+    final dataQuality = rawQuality is Map
+        ? Map<String, dynamic>.from(rawQuality)
+        : <String, dynamic>{};
+
+    final overallScore = _toDouble(
+      scores['overallWellbeingScore'],
+    );
+
+    final heartScore = _toDouble(
+      scores['heartHealthScore'],
+    );
+
+    final healthScore = _toDouble(
+      scores['healthScore'],
+    );
+
+    final personalScore = _toDouble(
+      scores['personalWellnessScore'],
+    );
+
+    final status = wellness['status']
+            ?.toString()
+            .replaceAll('_', ' ') ??
+        'unknown';
+
+    final recordsAnalyzed = _toInt(
+      analysis['recordsAnalyzed'] ??
+          dataQuality['recordsAnalyzed'],
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xff6c5ce7),
+            Color(0xff9f6eff),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff6c5ce7)
+                .withOpacity(0.18),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Health Score',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+
+                    SizedBox(height: 4),
+
+                    Text(
+                      'AI Wellbeing Analysis',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius:
+                      BorderRadius.circular(10),
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          Center(
+            child: Container(
+              width: 125,
+              height: 125,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.15),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.45),
+                  width: 2,
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment:
+                      MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      overallScore.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+
+                    const Text(
+                      'OVERALL SCORE',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildMlScoreItem(
+                  'Heart',
+                  heartScore,
+                  Icons.favorite_rounded,
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: _buildMlScoreItem(
+                  'Health',
+                  healthScore,
+                  Icons.health_and_safety_rounded,
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: _buildMlScoreItem(
+                  'Wellness',
+                  personalScore,
+                  Icons.spa_rounded,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.analytics_outlined,
+                  color: Colors.white70,
+                  size: 18,
+                ),
+
+                const SizedBox(width: 9),
+
+                Expanded(
+                  child: Text(
+                    '$recordsAnalyzed health records analyzed',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white70,
+                  size: 14,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openMlHealthDashboard,
+                  icon: const Icon(
+                    Icons.insights_rounded,
+                  ),
+                  label: const Text(
+                    'Details',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(
+                      color: Colors.white54,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 13,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _openMlHealthHistory,
+                  icon: const Icon(
+                    Icons.show_chart_rounded,
+                  ),
+                  label: const Text(
+                    'History',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor:
+                        const Color(0xff6c5ce7),
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 13,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMlScoreItem(
+    String label,
+    double score,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: Colors.white70,
+            size: 18,
+          ),
+
+          const SizedBox(height: 7),
+
+          Text(
+            score.toStringAsFixed(1),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          const SizedBox(height: 2),
+
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 9,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMlEmptyCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xff6c5ce7)
+              .withOpacity(0.12),
+        ),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.psychology_outlined,
+            size: 48,
+            color: Color(0xff6c5ce7),
+          ),
+
+          const SizedBox(height: 12),
+
+          const Text(
+            'ML Health Analysis Not Available',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            _mlError ??
+                'Sync health data to generate your personalized wellness analysis.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _mlLoading
+                  ? null
+                  : _loadMlHealthAnalysis,
+              icon: const Icon(
+                Icons.refresh_rounded,
+              ),
+              label: const Text(
+                'Try Again',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    const Color(0xff6c5ce7),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(14),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1971,7 +2647,8 @@ class _DashboardScreenState
 
                 unit:
                     "steps",
-              ),              _buildHealthMetric(
+              ),
+              _buildHealthMetric(
                 icon: Icons
                     .favorite_rounded,
                 title:
@@ -2313,7 +2990,8 @@ class _DashboardScreenState
 
           color:
               Colors.redAccent,
-        ),        _buildAverageMetric(
+        ),
+        _buildAverageMetric(
           icon: Icons.favorite_border_rounded,
           title:
               "Average Resting Heart Rate",
@@ -2647,7 +3325,6 @@ class _DashboardScreenState
       ),
     );
   }
-
 
   // ===========================================================================
   // FLOATING COMPUTER VISION BUTTON
