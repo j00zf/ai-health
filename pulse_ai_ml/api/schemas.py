@@ -1,6 +1,11 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    field_validator,
+)
 
 
 # ============================================================
@@ -9,27 +14,75 @@ from pydantic import BaseModel, Field
 
 class UserProfile(BaseModel):
 
-    age: Optional[float] = None
+    model_config = ConfigDict(
+        extra="ignore"
+    )
 
-    sex: Optional[int] = None
+    age: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=120,
+    )
 
-    height_cm: Optional[float] = None
+    sex: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=1,
+    )
 
-    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = Field(
+        default=None,
+        ge=50,
+        le=250,
+    )
 
-    bmi: Optional[float] = None
+    weight_kg: Optional[float] = Field(
+        default=None,
+        ge=10,
+        le=300,
+    )
 
-    waist_cm: Optional[float] = None
+    bmi: Optional[float] = Field(
+        default=None,
+        ge=5,
+        le=100,
+    )
 
-    heart_rate: Optional[float] = None
+    waist_cm: Optional[float] = Field(
+        default=None,
+        ge=20,
+        le=250,
+    )
 
-    activity_minutes: Optional[float] = None
+    heart_rate: Optional[float] = Field(
+        default=None,
+        ge=20,
+        le=250,
+    )
 
-    sleep_hours: Optional[float] = None
+    activity_minutes: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=2000,
+    )
 
-    smoking: Optional[int] = None
+    sleep_hours: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=24,
+    )
 
-    alcohol: Optional[int] = None
+    smoking: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=1,
+    )
+
+    alcohol: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=1,
+    )
 
 
 # ============================================================
@@ -38,29 +91,97 @@ class UserProfile(BaseModel):
 
 class HealthRecord(BaseModel):
 
+    model_config = ConfigDict(
+        extra="ignore"
+    )
+
     date: str
 
-    steps: Optional[float] = None
+    steps: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=200000,
+    )
 
-    activeHours: Optional[float] = None
+    activeHours: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=24,
+    )
 
-    activeZoneMinutes: Optional[float] = None
+    activeZoneMinutes: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=1440,
+    )
 
-    heartRate: Optional[float] = None
+    heartRate: Optional[float] = Field(
+        default=None,
+        ge=20,
+        le=250,
+    )
 
-    restingHeartRate: Optional[float] = None
+    restingHeartRate: Optional[float] = Field(
+        default=None,
+        ge=20,
+        le=200,
+    )
 
-    sleep: Optional[float] = None
+    sleep: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=24,
+    )
 
-    weight: Optional[float] = None
+    weight: Optional[float] = Field(
+        default=None,
+        ge=10,
+        le=300,
+    )
 
-    bmi: Optional[float] = None
+    bmi: Optional[float] = Field(
+        default=None,
+        ge=5,
+        le=100,
+    )
 
-    oxygenSaturation: Optional[float] = None
+    oxygenSaturation: Optional[float] = Field(
+        default=None,
+        ge=50,
+        le=100,
+    )
 
-    calories: Optional[float] = None
+    calories: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=20000,
+    )
 
-    distance: Optional[float] = None
+    distance: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=1000,
+    )
+
+    # --------------------------------------------------------
+    # DATE VALIDATION
+    # --------------------------------------------------------
+
+    @field_validator("date")
+    @classmethod
+    def validate_date(
+        cls,
+        value: str,
+    ) -> str:
+
+        value = value.strip()
+
+        if not value:
+            raise ValueError(
+                "date cannot be empty"
+            )
+
+        return value
 
 
 # ============================================================
@@ -69,15 +190,22 @@ class HealthRecord(BaseModel):
 
 class AnalyzeRequest(BaseModel):
 
+    model_config = ConfigDict(
+        extra="ignore"
+    )
+
     profile: UserProfile
 
-    health_records: List[HealthRecord] = Field(
-        default_factory=list
+    health_records: List[
+        HealthRecord
+    ] = Field(
+        default_factory=list,
+        max_length=366,
     )
 
 
 # ============================================================
-# HEALTH CHECK RESPONSE
+# HEALTH RESPONSE
 # ============================================================
 
 class HealthResponse(BaseModel):
@@ -87,3 +215,18 @@ class HealthResponse(BaseModel):
     service: str
 
     model_version: str
+
+    blood_pressure_used: bool
+
+
+# ============================================================
+# API ERROR
+# ============================================================
+
+class ErrorResponse(BaseModel):
+
+    error: str
+
+    message: str
+
+    code: Optional[str] = None

@@ -1,34 +1,76 @@
 const express = require("express");
 
+const router =
+    express.Router();
+
+const auth =
+    require(
+        "../middleware/userAuth"
+    );
+
 const {
-    analyzeMlHealth,
-    getMlHealthStatus,
+    mlAnalyzeHealth,
+    mlGetDashboard,
+    mlGetHistory,
+    mlGetImprovement,
+    mlGetLatestAnalysis,
 } = require(
     "../controllers/mlHealthController"
 );
 
 
-const router =
-    express.Router();
-
-
 // ============================================================
-// PULSE AI ANALYSIS
+// ML ANALYSIS
 // ============================================================
 
 router.post(
     "/analyze",
-    analyzeMlHealth
+    auth,
+    mlAnalyzeHealth
 );
 
 
 // ============================================================
-// PULSE AI HEALTH CHECK
+// ML DASHBOARD
 // ============================================================
 
 router.get(
-    "/status",
-    getMlHealthStatus
+    "/dashboard",
+    auth,
+    mlGetDashboard
+);
+
+
+// ============================================================
+// LATEST ML ANALYSIS
+// ============================================================
+
+router.get(
+    "/latest",
+    auth,
+    mlGetLatestAnalysis
+);
+
+
+// ============================================================
+// ML HISTORY
+// ============================================================
+
+router.get(
+    "/history",
+    auth,
+    mlGetHistory
+);
+
+
+// ============================================================
+// ML IMPROVEMENT
+// ============================================================
+
+router.get(
+    "/improvement",
+    auth,
+    mlGetImprovement
 );
 
 
