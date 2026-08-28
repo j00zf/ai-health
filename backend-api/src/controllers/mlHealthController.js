@@ -14,10 +14,18 @@ const {
 );
 
 
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
 const ML_API_URL =
     process.env.ML_API_URL ||
     "http://127.0.0.1:8000";
 
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 function getUserId(req) {
     return (
@@ -142,33 +150,34 @@ exports.mlAnalyzeHealth = async (
             });
         }
 
+
+        // ----------------------------------------------------
+        // PROFILE
+        // ----------------------------------------------------
+
         const {
             profile = {},
-            health_records,
         } = req.body;
 
 
         // ----------------------------------------------------
-        // LOAD HEALTH RECORDS
+        // ALWAYS LOAD LATEST HEALTH RECORDS
+        // ----------------------------------------------------
+        //
+        // Do not use health records supplied by the Flutter app.
+        // Always use the newest records stored for this
+        // authenticated user.
         // ----------------------------------------------------
 
         let healthRecords =
-            health_records;
-
-        if (
-            !Array.isArray(healthRecords) ||
-            !healthRecords.length
-        ) {
-            healthRecords =
-                await HealthRecord.find({
-                    user: userId,
+            await HealthRecord.find({
+                user: userId,
+            })
+                .sort({
+                    date: -1,
                 })
-                    .sort({
-                        date: -1,
-                    })
-                    .limit(30)
-                    .lean();
-        }
+                .limit(30)
+                .lean();
 
 
         if (!healthRecords.length) {
@@ -180,9 +189,16 @@ exports.mlAnalyzeHealth = async (
         }
 
 
-        // Reverse because database query is newest first
+        // ----------------------------------------------------
+        // CHRONOLOGICAL ORDER
+        // ----------------------------------------------------
+        //
+        // Database query is newest -> oldest.
+        // ML receives oldest -> newest.
+        // ----------------------------------------------------
+
         healthRecords =
-            healthRecords.reverse();
+            [...healthRecords].reverse();
 
 
         // ----------------------------------------------------
@@ -235,6 +251,7 @@ exports.mlAnalyzeHealth = async (
                 },
                 {
                     timeout: 30000,
+
                     headers: {
                         "Content-Type":
                             "application/json",
@@ -349,6 +366,7 @@ exports.mlAnalyzeHealth = async (
                     ),
             },
         });
+
     } catch (error) {
         console.error(
             "ML HEALTH ANALYSIS ERROR:",
@@ -446,6 +464,7 @@ exports.mlGetDashboard = async (
                     [],
             },
         });
+
     } catch (error) {
         console.error(
             "ML DASHBOARD ERROR:",
@@ -454,6 +473,7 @@ exports.mlGetDashboard = async (
 
         return res.status(500).json({
             success: false,
+
             message:
                 "Unable to load ML dashboard.",
         });
@@ -472,6 +492,15 @@ exports.mlGetHistory = async (
     try {
         const userId =
             getUserId(req);
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "User authentication required.",
+            });
+        }
+
 
         const limit = Math.min(
             Number(req.query.limit) || 100,
@@ -527,6 +556,7 @@ exports.mlGetHistory = async (
             data:
                 formattedHistory,
         });
+
     } catch (error) {
         console.error(
             "ML HISTORY ERROR:",
@@ -535,6 +565,7 @@ exports.mlGetHistory = async (
 
         return res.status(500).json({
             success: false,
+
             message:
                 "Unable to load ML health history.",
         });
@@ -553,6 +584,15 @@ exports.mlGetImprovement = async (
     try {
         const userId =
             getUserId(req);
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "User authentication required.",
+            });
+        }
+
 
         const analyses =
             await MLHealthAnalysis.find({
@@ -704,6 +744,7 @@ exports.mlGetImprovement = async (
                 history,
             },
         });
+
     } catch (error) {
         console.error(
             "ML IMPROVEMENT ERROR:",
@@ -712,6 +753,7 @@ exports.mlGetImprovement = async (
 
         return res.status(500).json({
             success: false,
+
             message:
                 "Unable to calculate improvements.",
         });
@@ -731,6 +773,15 @@ exports.mlGetLatestAnalysis = async (
         const userId =
             getUserId(req);
 
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "User authentication required.",
+            });
+        }
+
+
         const analysis =
             await MLHealthAnalysis.findOne({
                 user: userId,
@@ -743,11 +794,20 @@ exports.mlGetLatestAnalysis = async (
 
         return res.status(200).json({
             success: true,
-            data: analysis || null,
+
+            data:
+                analysis || null,
         });
+
     } catch (error) {
+        console.error(
+            "LATEST ML ANALYSIS ERROR:",
+            error
+        );
+
         return res.status(500).json({
             success: false,
+
             message:
                 "Unable to load latest analysis.",
         });

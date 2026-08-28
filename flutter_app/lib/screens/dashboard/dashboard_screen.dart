@@ -57,6 +57,7 @@ class _DashboardScreenState
   List<Map<String, dynamic>> healthRecords = [];
   Map<String, dynamic>? _mlAnalysis;
   bool _mlLoading = false;
+  bool _mlAnalyzing = false;
   String? _mlError;
 
   Map<String, dynamic>? latestHealthRecord;
@@ -129,6 +130,131 @@ class _DashboardScreenState
         _mlLoading = false;
         _mlError = 'Unable to load ML health analysis.';
       });
+    }
+  }
+
+
+  Map<String, dynamic> _currentMlProfile() {
+    final rawProfile = dashboard?['profile'];
+    return rawProfile is Map
+        ? Map<String, dynamic>.from(rawProfile)
+        : <String, dynamic>{};
+  }
+
+  String _recordDateKey(Map<String, dynamic>? record) {
+    if (record == null) return '';
+    return (record['date'] ??
+            record['recordDate'] ??
+            record['createdAt'] ??
+            record['updatedAt'] ??
+            '')
+        .toString();
+  }
+
+  String _analysisSourceDateKey(Map<String, dynamic>? analysis) {
+    if (analysis == null) return '';
+    return (analysis['sourceRecordDate'] ??
+            analysis['latestHealthRecord']?['date'] ??
+            '')
+        .toString();
+  }
+
+  Future<void> _runMlAnalysis({bool showFeedback = true}) async {
+    if (_mlAnalyzing) return;
+
+    if (healthRecords.isEmpty) {
+      await loadHealthOverview();
+    }
+    if (!mounted) return;
+
+    if (healthRecords.isEmpty) {
+      setState(() {
+        _mlError =
+            'No health records are available yet. Sync your latest health data first.';
+      });
+      if (showFeedback) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No health records are available for ML analysis.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _mlAnalyzing = true;
+      _mlError = null;
+    });
+
+    try {
+      final result = await MlHealthService.analyze(
+        token: widget.token,
+        profile: _currentMlProfile(),
+        healthRecords: healthRecords,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        await _loadMlHealthAnalysis();
+        if (mounted && showFeedback) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'ML health analysis completed using the latest health records.',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _mlError = result['message']?.toString() ??
+              'Unable to complete ML health analysis.';
+        });
+        if (mounted && showFeedback) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_mlError!),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _mlError = 'Unable to complete ML health analysis.';
+      });
+      if (showFeedback) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ML analysis failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _mlAnalyzing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _ensureLatestMlAnalysis() async {
+    if (healthRecords.isEmpty || _mlAnalyzing) return;
+
+    final latestRecordDate = _recordDateKey(latestHealthRecord);
+    final analyzedRecordDate = _analysisSourceDateKey(_mlAnalysis);
+
+    if (_mlAnalysis == null ||
+        latestRecordDate.isEmpty ||
+        latestRecordDate != analyzedRecordDate) {
+      await _runMlAnalysis(showFeedback: false);
     }
   }
 
@@ -317,6 +443,11 @@ class _DashboardScreenState
             ? 'No saved health records found'
             : 'Latest saved health record';
       });
+
+      if (records.isNotEmpty) {
+        await _loadMlHealthAnalysis();
+        await _ensureLatestMlAnalysis();
+      }
     } catch (e) {
       debugPrint('Stored health overview error: $e');
       if (!mounted) return;
@@ -1137,6 +1268,7 @@ class _DashboardScreenState
     await loadHealthOverview();
 
     await _loadMlHealthAnalysis();
+    await _ensureLatestMlAnalysis();
   }
 
   // ===========================================================================
@@ -1334,9 +1466,9 @@ class _DashboardScreenState
 
             IconButton(
               tooltip: 'Refresh ML analysis',
-              onPressed: _mlLoading
+              onPressed: (_mlLoading || _mlAnalyzing)
                   ? null
-                  : _loadMlHealthAnalysis,
+                  : () => _runMlAnalysis(),
               icon: const Icon(
                 Icons.refresh_rounded,
                 color: Color(0xff6c5ce7),
@@ -1625,6 +1757,41 @@ class _DashboardScreenState
 
           const SizedBox(height: 16),
 
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: (_mlLoading || _mlAnalyzing)
+                  ? null
+                  : () => _runMlAnalysis(),
+              icon: _mlAnalyzing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.auto_graph_rounded),
+              label: Text(
+                _mlAnalyzing
+                    ? 'Analyzing Latest Records...'
+                    : 'Run ML Analysis',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff6c5ce7),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
           Row(
             children: [
               Expanded(
@@ -1780,9 +1947,9 @@ class _DashboardScreenState
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _mlLoading
+              onPressed: (_mlLoading || _mlAnalyzing)
                   ? null
-                  : _loadMlHealthAnalysis,
+                  : () => _runMlAnalysis(),
               icon: const Icon(
                 Icons.refresh_rounded,
               ),

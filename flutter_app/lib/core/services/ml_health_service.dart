@@ -5,6 +5,28 @@ import '../constants/api_constants.dart';
 class MlHealthService {
   static final Dio _dio = Dio();
 
+  /// Safely extracts server errors when response data is JSON, text, or empty.
+  static String _errorMessage(DioException error, String fallback) {
+    final data = error.response?.data;
+
+    if (data is Map) {
+      final message = data['message'] ?? data['error'] ?? data['detail'];
+      if (message != null && message.toString().trim().isNotEmpty) {
+        return message.toString();
+      }
+    }
+
+    if (data is String && data.trim().isNotEmpty) {
+      return data;
+    }
+
+    if (error.message != null && error.message!.trim().isNotEmpty) {
+      return error.message!;
+    }
+
+    return fallback;
+  }
+
   static Options _options(String token) {
     return Options(
       headers: {
@@ -23,7 +45,7 @@ class MlHealthService {
   }) async {
     try {
       final response = await _dio.get(
-        '${ApiConstants.baseUrl}/ml-health/latest',
+        '${ApiConstants.baseUrl}/v1/ml-health/latest',
         options: _options(token),
       );
 
@@ -38,10 +60,7 @@ class MlHealthService {
     } on DioException catch (e) {
       return {
         'success': false,
-        'message':
-            e.response?.data?['message'] ??
-            e.message ??
-            'Failed to load latest ML analysis',
+        'message': _errorMessage(e, 'Failed to load latest ML analysis'),
       };
     } catch (e) {
       return {
@@ -61,7 +80,7 @@ class MlHealthService {
   }) async {
     try {
       final response = await _dio.get(
-        '${ApiConstants.baseUrl}/ml-health/history',
+        '${ApiConstants.baseUrl}/v1/ml-health/history',
         queryParameters: {
           'days': days,
         },
@@ -79,10 +98,7 @@ class MlHealthService {
     } on DioException catch (e) {
       return {
         'success': false,
-        'message':
-            e.response?.data?['message'] ??
-            e.message ??
-            'Failed to load ML history',
+        'message': _errorMessage(e, 'Failed to load ML history'),
       };
     } catch (e) {
       return {
@@ -103,7 +119,7 @@ class MlHealthService {
   }) async {
     try {
       final response = await _dio.post(
-        '${ApiConstants.baseUrl}/ml-health/analyze',
+        '${ApiConstants.baseUrl}/v1/ml-health/analyze',
         data: {
           'profile': profile,
           'health_records': healthRecords,
@@ -122,10 +138,7 @@ class MlHealthService {
     } on DioException catch (e) {
       return {
         'success': false,
-        'message':
-            e.response?.data?['message'] ??
-            e.message ??
-            'ML analysis failed',
+        'message': _errorMessage(e, 'ML analysis failed'),
       };
     } catch (e) {
       return {
