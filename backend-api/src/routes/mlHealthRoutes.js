@@ -1,78 +1,83 @@
 const express = require("express");
 
 const router =
-    express.Router();
+express.Router();
 
 const auth =
-    require(
-        "../middleware/userAuth"
-    );
-
-const {
-    mlAnalyzeHealth,
-    mlGetDashboard,
-    mlGetHistory,
-    mlGetImprovement,
-    mlGetLatestAnalysis,
-} = require(
-    "../controllers/mlHealthController"
+require(
+"../middleware/userAuth"
 );
 
+const {
+mlAnalyzeHealth,
+mlGetDashboard,
+mlGetHistory,
+mlGetImprovement,
+mlGetLatestAnalysis,
+mlGetLatestHealthRecord,
+} = require(
+"../controllers/mlHealthController"
+);
 
 // ============================================================
-// ML ANALYSIS
+// RUN ML ANALYSIS
 // ============================================================
 
 router.post(
-    "/analyze",
-    auth,
-    mlAnalyzeHealth
+"/analyze",
+auth,
+mlAnalyzeHealth
 );
 
+// ============================================================
+// GET LATEST HEALTH RECORD
+// ============================================================
+
+router.get(
+"/latest-record",
+auth,
+mlGetLatestHealthRecord
+);
 
 // ============================================================
 // ML DASHBOARD
 // ============================================================
 
 router.get(
-    "/dashboard",
-    auth,
-    mlGetDashboard
+"/dashboard",
+auth,
+mlGetDashboard
 );
-
 
 // ============================================================
 // LATEST ML ANALYSIS
 // ============================================================
 
 router.get(
-    "/latest",
-    auth,
-    mlGetLatestAnalysis
+"/latest",
+auth,
+mlGetLatestAnalysis
 );
-
 
 // ============================================================
 // ML HISTORY
 // ============================================================
 
 router.get(
-    "/history",
-    auth,
-    mlGetHistory
+"/history",
+auth,
+mlGetHistory
 );
-
 
 // ============================================================
 // ML IMPROVEMENT
 // ============================================================
 
 router.get(
-    "/improvement",
-    auth,
-    mlGetImprovement
+"/improvement",
+auth,
+mlGetImprovement
 );
 
-
 module.exports =
-    router;
+router;

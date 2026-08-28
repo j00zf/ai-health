@@ -159,104 +159,172 @@ class _DashboardScreenState
         .toString();
   }
 
-  Future<void> _runMlAnalysis({bool showFeedback = true}) async {
-    if (_mlAnalyzing) return;
+Future<void> _runMlAnalysis({
+bool showFeedback = true,
+}) async {
+if (_mlAnalyzing) return;
+if (!mounted) return;
 
-    if (healthRecords.isEmpty) {
-      await loadHealthOverview();
-    }
-    if (!mounted) return;
+setState(() {
+_mlAnalyzing = true;
+_mlError = null;
+});
 
-    if (healthRecords.isEmpty) {
-      setState(() {
-        _mlError =
-            'No health records are available yet. Sync your latest health data first.';
-      });
-      if (showFeedback) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No health records are available for ML analysis.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
+try {
+// The backend is the source of truth.
+//
+// It retrieves the latest health records from the database,
+// fills missing fields using available averages,
+// performs the ML analysis,
+// and saves the new analysis as the latest analysis.
+final result = await MlHealthService.analyze(
+token: widget.token,
+profile: _currentMlProfile(),
+);
 
+
+if (!mounted) return;
+
+if (result['success'] == true) {
+  final rawData = result['data'];
+
+  if (rawData is Map) {
     setState(() {
-      _mlAnalyzing = true;
-      _mlError = null;
+      _mlAnalysis = Map<String, dynamic>.from(rawData);
     });
-
-    try {
-      final result = await MlHealthService.analyze(
-        token: widget.token,
-        profile: _currentMlProfile(),
-        healthRecords: healthRecords,
-      );
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        await _loadMlHealthAnalysis();
-        if (mounted && showFeedback) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'ML health analysis completed using the latest health records.',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        setState(() {
-          _mlError = result['message']?.toString() ??
-              'Unable to complete ML health analysis.';
-        });
-        if (mounted && showFeedback) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(_mlError!),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _mlError = 'Unable to complete ML health analysis.';
-      });
-      if (showFeedback) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ML analysis failed: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _mlAnalyzing = false;
-        });
-      }
-    }
   }
 
-  Future<void> _ensureLatestMlAnalysis() async {
-    if (healthRecords.isEmpty || _mlAnalyzing) return;
+  // Reload from the backend database so the dashboard always
+  // displays the persisted latest ML analysis.
+  await _loadMlHealthAnalysis();
 
-    final latestRecordDate = _recordDateKey(latestHealthRecord);
-    final analyzedRecordDate = _analysisSourceDateKey(_mlAnalysis);
+  if (!mounted) return;
 
-    if (_mlAnalysis == null ||
-        latestRecordDate.isEmpty ||
-        latestRecordDate != analyzedRecordDate) {
-      await _runMlAnalysis(showFeedback: false);
-    }
+  if (showFeedback) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'ML analysis completed and saved successfully.',
+        ),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
+} else {
+  final message =
+      result['message']?.toString() ??
+      'Unable to complete ML health analysis.';
+
+  setState(() {
+    _mlError = message;
+  });
+
+  if (showFeedback) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+}
+
+
+} catch (e) {
+debugPrint('[Dashboard] ML analysis error: $e');
+
+
+if (!mounted) return;
+
+setState(() {
+  _mlError =
+      'Unable to complete ML health analysis.';
+});
+
+if (showFeedback) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'ML analysis failed: $e',
+      ),
+      backgroundColor: Colors.redAccent,
+    ),
+  );
+}
+
+
+} finally {
+if (mounted) {
+setState(() {
+_mlAnalyzing = false;
+});
+}
+}
+}
+
+Future<void> _ensureLatestMlAnalysis() async {
+if (_mlAnalyzing) return;
+
+try {
+// Ask the backend for the actual latest saved health record.
+// Do not depend on the local Flutter healthRecords list.
+final result =
+await MlHealthService.getLatestHealthRecord(
+token: widget.token,
+);
+
+
+if (!mounted) return;
+
+if (result['success'] != true) {
+  return;
+}
+
+final rawData = result['data'];
+
+if (rawData is! Map) {
+  return;
+}
+
+final data =
+    Map<String, dynamic>.from(rawData);
+
+final rawLatestRecord =
+    data['latestRecord'];
+
+if (rawLatestRecord is! Map) {
+  return;
+}
+
+final backendLatestRecord =
+    Map<String, dynamic>.from(rawLatestRecord);
+
+final latestRecordDate =
+    _recordDateKey(backendLatestRecord);
+
+final analyzedRecordDate =
+    _analysisSourceDateKey(_mlAnalysis);
+
+// Run ML analysis automatically when:
+//
+// 1. No saved ML analysis exists, OR
+// 2. The latest health record is newer/different from
+//    the health record used for the previous analysis.
+if (_mlAnalysis == null ||
+    analyzedRecordDate.isEmpty ||
+    latestRecordDate != analyzedRecordDate) {
+  await _runMlAnalysis(
+    showFeedback: false,
+  );
+}
+
+
+} catch (e) {
+debugPrint(
+'[Dashboard] Latest ML analysis check error: $e',
+);
+}
+}
 
   Future<void> _initializeHealthAndDashboard() async {
     await HealthService.initialize();
@@ -421,41 +489,85 @@ class _DashboardScreenState
 
     try {
       final token = await AuthManager().getToken();
+
       if (token == null || token.isEmpty) {
         throw Exception('No authentication token found.');
       }
 
-      final history = await HealthService.loadStoredHealthHistory(token);
+      final history =
+          await HealthService.loadStoredHealthHistory(token);
+
       final rawRecords = history['records'];
+
       final records = rawRecords is List
           ? rawRecords
               .whereType<Map>()
-              .map((record) => Map<String, dynamic>.from(record))
+              .map(
+                (record) =>
+                    Map<String, dynamic>.from(record),
+              )
               .toList()
           : <Map<String, dynamic>>[];
 
       if (!mounted) return;
+
       setState(() {
         healthRecords = records;
-        latestHealthRecord = records.isNotEmpty ? records.first : null;
+
+        latestHealthRecord =
+            records.isNotEmpty
+                ? records.first
+                : null;
+
         isHealthLoading = false;
-        healthRecordStatus = records.isEmpty
-            ? 'No saved health records found'
-            : 'Latest saved health record';
+
+        healthRecordStatus =
+            records.isEmpty
+                ? 'No local health records found'
+                : 'Latest saved health record';
       });
 
-      if (records.isNotEmpty) {
-        await _loadMlHealthAnalysis();
-        await _ensureLatestMlAnalysis();
-      }
+      // -----------------------------------------------------------------------
+      // IMPORTANT:
+      //
+      // Do NOT depend on the local Flutter healthRecords list for ML.
+      //
+      // The backend database is the source of truth for:
+      // - latest health record
+      // - latest ML analysis
+      // - automatic ML analysis
+      // -----------------------------------------------------------------------
+
+      await _loadMlHealthAnalysis();
+
+      await _ensureLatestMlAnalysis();
     } catch (e) {
-      debugPrint('Stored health overview error: $e');
+      debugPrint(
+        'Stored health overview error: $e',
+      );
+
       if (!mounted) return;
+
       setState(() {
         isHealthLoading = false;
-        healthErrorMessage = 'Unable to load saved health data';
-        healthRecordStatus = 'Unable to load saved health data';
+
+        healthErrorMessage =
+            'Unable to load saved health data';
+
+        healthRecordStatus =
+            'Unable to load saved health data';
       });
+
+      // Even if local health loading fails, try loading the
+      // backend ML result because the ML backend may still have data.
+      try {
+        await _loadMlHealthAnalysis();
+        await _ensureLatestMlAnalysis();
+      } catch (mlError) {
+        debugPrint(
+          '[Dashboard] ML fallback check failed: $mlError',
+        );
+      }
     }
   }
 
