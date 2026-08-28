@@ -1,4 +1,6 @@
 from typing import Any, Dict
+import json
+import traceback
 
 from fastapi import (
     FastAPI,
@@ -6,9 +8,17 @@ from fastapi import (
     Request,
 )
 
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import (
+    RequestValidationError,
+)
 
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
+
+from fastapi.responses import (
+    JSONResponse,
+)
 
 from .schemas import (
     AnalyzeRequest,
@@ -37,7 +47,6 @@ API_VERSION = "2.0.0"
 # ============================================================
 
 app = FastAPI(
-
     title="Pulse AI ML API",
 
     description=(
@@ -57,28 +66,16 @@ app = FastAPI(
 # ============================================================
 # CORS
 # ============================================================
-#
-# Development:
-# - localhost
-# - 127.0.0.1
-#
-# Later, replace these with the real Pulse AI frontend domain.
-#
 
 ALLOWED_ORIGINS = [
-
     "http://localhost:3000",
-
     "http://127.0.0.1:3000",
-
     "http://localhost:5173",
-
     "http://127.0.0.1:5173",
 ]
 
 
 app.add_middleware(
-
     CORSMiddleware,
 
     allow_origins=ALLOWED_ORIGINS,
@@ -92,9 +89,147 @@ app.add_middleware(
     ],
 
     allow_headers=[
-        "*"
+        "*",
     ],
 )
+
+
+# ============================================================
+# REQUEST VALIDATION ERROR HANDLER
+#
+# IMPORTANT:
+# This catches FastAPI/Pydantic validation errors that happen
+# BEFORE the /analyze endpoint function is executed.
+#
+# This is the handler needed to debug your current 422 error.
+# ============================================================
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
+    print("\n", flush=True)
+    print("=" * 80, flush=True)
+    print("❌ FASTAPI REQUEST VALIDATION ERROR (422)", flush=True)
+    print("=" * 80, flush=True)
+
+    print(
+        f"\nREQUEST METHOD: {request.method}",
+        flush=True,
+    )
+
+    print(
+        f"REQUEST PATH: {request.url.path}",
+        flush=True,
+    )
+
+    print(
+        f"REQUEST URL: {request.url}",
+        flush=True,
+    )
+
+    print(
+        "\nVALIDATION ERRORS:",
+        flush=True,
+    )
+
+    try:
+        validation_errors = exc.errors()
+
+        print(
+            json.dumps(
+                validation_errors,
+                indent=2,
+                default=str,
+            ),
+            flush=True,
+        )
+
+    except Exception as log_error:
+        validation_errors = exc.errors()
+
+        print(
+            f"Could not JSON format validation errors: "
+            f"{log_error}",
+            flush=True,
+        )
+
+        print(
+            validation_errors,
+            flush=True,
+        )
+
+    print(
+        "\nRAW REQUEST BODY:",
+        flush=True,
+    )
+
+    try:
+        body = await request.body()
+
+        if body:
+            raw_body = body.decode(
+                "utf-8",
+                errors="replace",
+            )
+
+            try:
+                parsed_body = json.loads(
+                    raw_body,
+                )
+
+                print(
+                    json.dumps(
+                        parsed_body,
+                        indent=2,
+                        default=str,
+                    ),
+                    flush=True,
+                )
+
+            except Exception:
+                print(
+                    raw_body,
+                    flush=True,
+                )
+
+        else:
+            print(
+                "(EMPTY REQUEST BODY)",
+                flush=True,
+            )
+
+    except Exception as body_error:
+        print(
+            f"Could not read request body: {body_error}",
+            flush=True,
+        )
+
+    print("\n" + "=" * 80, flush=True)
+    print(
+        "END OF 422 VALIDATION ERROR",
+        flush=True,
+    )
+    print("=" * 80 + "\n", flush=True)
+
+    return JSONResponse(
+        status_code=422,
+
+        content={
+            "error":
+                "validation_error",
+
+            "message":
+                "Request validation failed.",
+
+            "detail":
+                validation_errors,
+
+            "path":
+                request.url.path,
+        },
+    )
 
 
 # ============================================================
@@ -103,9 +238,7 @@ app.add_middleware(
 
 @app.get("/")
 def root() -> Dict[str, Any]:
-
     return {
-
         "service":
             SERVICE_NAME,
 
@@ -122,7 +255,6 @@ def root() -> Dict[str, Any]:
             False,
 
         "endpoints": {
-
             "health":
                 "/health",
 
@@ -147,9 +279,7 @@ def root() -> Dict[str, Any]:
     response_model=HealthResponse,
 )
 def health_check():
-
     return {
-
         "status":
             "healthy",
 
@@ -170,9 +300,7 @@ def health_check():
 
 @app.get("/api/v1/info")
 def api_info():
-
     return {
-
         "service":
             SERVICE_NAME,
 
@@ -183,7 +311,6 @@ def api_info():
             MODEL_VERSION,
 
         "features": {
-
             "heartHealth":
                 True,
 
@@ -207,11 +334,9 @@ def api_info():
 
             "aiInterpretation":
                 True,
-
         },
 
         "constraints": {
-
             "bloodPressureUsed":
                 False,
 
@@ -220,7 +345,6 @@ def api_info():
 
             "clinicalDecisionSupport":
                 False,
-
         },
     }
 
@@ -236,6 +360,16 @@ def analyze_user_endpoint(
     request: AnalyzeRequest,
 ) -> Dict[str, Any]:
 
+    print("\n", flush=True)
+    print("=" * 80, flush=True)
+    print("🧠 PULSE AI ANALYSIS REQUEST RECEIVED", flush=True)
+    print("=" * 80, flush=True)
+
+    print(
+        "\n📊 Request accepted by Pydantic validation.",
+        flush=True,
+    )
+
     # ========================================================
     # MINIMUM DATA CHECK
     # ========================================================
@@ -244,17 +378,18 @@ def analyze_user_endpoint(
         request.health_records
     )
 
-    # --------------------------------------------------------
-    # We allow zero records because the ML baseline can still
-    # operate from the user profile.
-    #
-    # But the longitudinal engine requires records.
-    # --------------------------------------------------------
+    print(
+        f"\n📈 Health records received: {record_count}",
+        flush=True,
+    )
 
     if record_count > 366:
+        print(
+            "❌ Too many health records.",
+            flush=True,
+        )
 
         raise HTTPException(
-
             status_code=422,
 
             detail={
@@ -275,17 +410,40 @@ def analyze_user_endpoint(
     # ========================================================
 
     try:
+        print(
+            "\n🔄 Converting profile data...",
+            flush=True,
+        )
 
         profile = (
             request.profile.model_dump(
-                exclude_none=True
+                exclude_none=True,
             )
         )
 
-        health_records = [
+        print(
+            "\n👤 NORMALIZED PROFILE:",
+            flush=True,
+        )
 
+        print(
+            json.dumps(
+                profile,
+                indent=2,
+                default=str,
+            ),
+            flush=True,
+        )
+
+
+        print(
+            "\n🔄 Converting health records...",
+            flush=True,
+        )
+
+        health_records = [
             record.model_dump(
-                exclude_none=True
+                exclude_none=True,
             )
 
             for record
@@ -293,10 +451,54 @@ def analyze_user_endpoint(
         ]
 
 
+        print(
+            f"\n📊 CONVERTED HEALTH RECORDS: "
+            f"{len(health_records)}",
+            flush=True,
+        )
+
+
+        if health_records:
+            print(
+                "\n📋 LATEST HEALTH RECORD:",
+                flush=True,
+            )
+
+            print(
+                json.dumps(
+                    health_records[-1],
+                    indent=2,
+                    default=str,
+                ),
+                flush=True,
+            )
+
+        else:
+            print(
+                "\n⚠️ No health records provided.",
+                flush=True,
+            )
+
+
     except Exception as exc:
+        print(
+            "\n❌ REQUEST CONVERSION FAILED",
+            flush=True,
+        )
+
+        print(
+            f"Error type: {type(exc).__name__}",
+            flush=True,
+        )
+
+        print(
+            f"Error message: {str(exc)}",
+            flush=True,
+        )
+
+        traceback.print_exc()
 
         raise HTTPException(
-
             status_code=422,
 
             detail={
@@ -317,19 +519,54 @@ def analyze_user_endpoint(
     # ========================================================
 
     try:
+        print(
+            "\n🤖 STARTING PULSE AI INFERENCE...",
+            flush=True,
+        )
 
         result = analyze_user(
-
             profile,
-
             health_records,
+        )
+
+        print(
+            "\n✅ PULSE AI INFERENCE COMPLETED",
+            flush=True,
+        )
+
+        if not isinstance(
+            result,
+            dict,
+        ):
+            raise ValueError(
+                "Pulse AI inference did not return a dictionary."
+            )
+
+        print(
+            "\n📦 RESULT KEYS:",
+            flush=True,
+        )
+
+        print(
+            list(result.keys()),
+            flush=True,
         )
 
 
     except ValueError as exc:
+        print(
+            "\n❌ ANALYSIS VALIDATION ERROR",
+            flush=True,
+        )
+
+        print(
+            f"Error: {str(exc)}",
+            flush=True,
+        )
+
+        traceback.print_exc()
 
         raise HTTPException(
-
             status_code=422,
 
             detail={
@@ -345,14 +582,34 @@ def analyze_user_endpoint(
         )
 
 
-    except Exception as exc:
+    except HTTPException:
+        raise
 
-        # ----------------------------------------------------
-        # Do not expose internal traceback to the client.
-        # ----------------------------------------------------
+
+    except Exception as exc:
+        print(
+            "\n❌ PULSE AI INFERENCE ERROR",
+            flush=True,
+        )
+
+        print(
+            f"Error type: {type(exc).__name__}",
+            flush=True,
+        )
+
+        print(
+            f"Error message: {str(exc)}",
+            flush=True,
+        )
+
+        print(
+            "\nFULL TRACEBACK:",
+            flush=True,
+        )
+
+        traceback.print_exc()
 
         raise HTTPException(
-
             status_code=500,
 
             detail={
@@ -373,7 +630,6 @@ def analyze_user_endpoint(
     # ========================================================
 
     result["api"] = {
-
         "version":
             API_VERSION,
 
@@ -385,7 +641,6 @@ def analyze_user_endpoint(
 
         "bloodPressureUsed":
             False,
-
     }
 
 
@@ -394,7 +649,6 @@ def analyze_user_endpoint(
     # ========================================================
 
     result["input"] = {
-
         "healthRecordsProvided":
             record_count,
 
@@ -403,7 +657,6 @@ def analyze_user_endpoint(
 
         "forecastAvailable":
             record_count > 0,
-
     }
 
 
@@ -412,7 +665,6 @@ def analyze_user_endpoint(
     # ========================================================
 
     result["safety"] = {
-
         "medicalDiagnosis":
             False,
 
@@ -427,9 +679,15 @@ def analyze_user_endpoint(
 
         "forecastIsNotDiagnosis":
             True,
-
     }
 
+
+    print("\n" + "=" * 80, flush=True)
+    print(
+        "🎉 PULSE AI REQUEST COMPLETED SUCCESSFULLY",
+        flush=True,
+    )
+    print("=" * 80 + "\n", flush=True)
 
     return result
 
@@ -439,23 +697,90 @@ def analyze_user_endpoint(
 # ============================================================
 
 @app.exception_handler(
-    HTTPException
+    HTTPException,
 )
 async def http_exception_handler(
     request: Request,
     exc: HTTPException,
 ):
 
-    return JSONResponse(
+    print("\n", flush=True)
+    print("=" * 80, flush=True)
+    print(
+        f"⚠️ HTTP EXCEPTION: {exc.status_code}",
+        flush=True,
+    )
+    print("=" * 80, flush=True)
 
+    print(
+        f"PATH: {request.url.path}",
+        flush=True,
+    )
+
+    print(
+        "DETAIL:",
+        flush=True,
+    )
+
+    print(
+        json.dumps(
+            exc.detail,
+            indent=2,
+            default=str,
+        )
+        if isinstance(
+            exc.detail,
+            (dict, list),
+        )
+        else str(exc.detail),
+        flush=True,
+    )
+
+    print("=" * 80 + "\n", flush=True)
+
+    return JSONResponse(
         status_code=exc.status_code,
 
         content={
-
             "error":
-                "request_error",
+                (
+                    exc.detail.get(
+                        "error",
+                        "request_error",
+                    )
+                    if isinstance(
+                        exc.detail,
+                        dict,
+                    )
+                    else "request_error"
+                ),
 
             "message":
+                (
+                    exc.detail.get(
+                        "message",
+                        str(exc.detail),
+                    )
+                    if isinstance(
+                        exc.detail,
+                        dict,
+                    )
+                    else str(exc.detail)
+                ),
+
+            "code":
+                (
+                    exc.detail.get(
+                        "code",
+                    )
+                    if isinstance(
+                        exc.detail,
+                        dict,
+                    )
+                    else None
+                ),
+
+            "detail":
                 exc.detail,
 
             "path":
@@ -469,19 +794,49 @@ async def http_exception_handler(
 # ============================================================
 
 @app.exception_handler(
-    Exception
+    Exception,
 )
 async def unexpected_exception_handler(
     request: Request,
     exc: Exception,
 ):
 
-    return JSONResponse(
+    print("\n", flush=True)
+    print("=" * 80, flush=True)
+    print(
+        "💥 UNEXPECTED SERVER ERROR",
+        flush=True,
+    )
+    print("=" * 80, flush=True)
 
+    print(
+        f"PATH: {request.url.path}",
+        flush=True,
+    )
+
+    print(
+        f"ERROR TYPE: {type(exc).__name__}",
+        flush=True,
+    )
+
+    print(
+        f"ERROR MESSAGE: {str(exc)}",
+        flush=True,
+    )
+
+    print(
+        "\nFULL TRACEBACK:",
+        flush=True,
+    )
+
+    traceback.print_exc()
+
+    print("=" * 80 + "\n", flush=True)
+
+    return JSONResponse(
         status_code=500,
 
         content={
-
             "error":
                 "internal_server_error",
 
