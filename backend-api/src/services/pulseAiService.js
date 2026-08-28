@@ -1,894 +1,750 @@
-const HealthRecord = require("../models/HealthRecord");
-
-const MLHealthAnalysis = require(
-"../models/mlHealthAnalysis"
-);
-
-const {
-normalizeHealthRecords,
-extractLatestDimensions,
-} = require(
-"../utils/mlHealthDataHelper"
-);
-
-const {
-analyzeWithPulseAI,
-} = require(
-"../services/pulseAiService"
-);
+const axios = require("axios");
 
 // ============================================================
-// HELPERS
+// PULSE AI CONFIGURATION
 // ============================================================
 
-function getUserId(req) {
-return (
-req.user?._id ||
-req.user?.id ||
-req.userId
-);
-}
+const PULSE_AI_URL =
+    process.env.PULSE_AI_URL ||
+    "http://127.0.0.1:8000/api/v1/analyze";
+
 
 // ============================================================
-// BUILD ML PROFILE
+// AXIOS CLIENT
 // ============================================================
 
-function buildProfile(userProfile = {}) {
-return {
-age:
-userProfile.age ??
-userProfile.age_years ??
-null,
+const pulseAiClient = axios.create({
+    timeout: 120000,
+    headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+    },
+});
 
-
-    sex:
-        userProfile.sex ??
-        null,
-
-    height_cm:
-        userProfile.height_cm ??
-        userProfile.height ??
-        null,
-
-    weight_kg:
-        userProfile.weight_kg ??
-        userProfile.weight ??
-        null,
-
-    bmi:
-        userProfile.bmi ??
-        null,
-
-    waist_cm:
-        userProfile.waist_cm ??
-        userProfile.waist ??
-        null,
-
-    heart_rate:
-        userProfile.heart_rate ??
-        userProfile.heartRate ??
-        null,
-
-    activity_minutes:
-        userProfile.activity_minutes ??
-        userProfile.activityMinutes ??
-        null,
-
-    sleep_hours:
-        userProfile.sleep_hours ??
-        userProfile.sleepHours ??
-        null,
-
-    smoking:
-        userProfile.smoking ??
-        userProfile.smoke ??
-        0,
-
-    alcohol:
-        userProfile.alcohol ??
-        0,
-};
-
-
-}
 
 // ============================================================
-// NORMALIZE DATABASE RECORD FOR ML
+// DEFAULT VALUES
 //
-// Converts HealthRecord schema fields to Pulse AI fields.
+// These values are only used when a field is unavailable.
+// The ML controller can still provide record-based averages
+// before calling this service.
 // ============================================================
 
-function mapDatabaseRecordToMlRecord(record = {}) {
-return {
-date:
-record.date ?? null,
+const DEFAULTS = {
+    age: 30,
+    sex: 0,
+    height_cm: 170,
+    weight_kg: 70,
+    bmi: 24,
+    waist_cm: 85,
+    heart_rate: 75,
+    activity_minutes: 30,
+    sleep_hours: 7,
+    smoking: 0,
+    alcohol: 0,
 
-
-    steps:
-        record.steps ?? null,
-
-    activeHours:
-        record.activeHours ?? null,
-
-    activeZoneMinutes:
-        record.activeZoneMinutes ?? null,
-
-    heartRate:
-        record.heartRate ?? null,
-
-    restingHeartRate:
-        record.restingHeartRate ?? null,
-
-    // Database uses sleepHours.
-    // ML uses sleep.
-    sleep:
-        record.sleep ??
-        record.sleepHours ??
-        null,
-
-    weight:
-        record.weight ?? null,
-
-    bmi:
-        record.bmi ?? null,
-
-    // Database uses bloodOxygen.
-    // ML uses oxygenSaturation.
-    oxygenSaturation:
-        record.oxygenSaturation ??
-        record.bloodOxygen ??
-        null,
-
-    calories:
-        record.calories ?? null,
-
-    // Database uses distanceWalked.
-    // ML uses distance.
-    distance:
-        record.distance ??
-        record.distanceWalked ??
-        null,
+    steps: 5000,
+    activeHours: 8,
+    activeZoneMinutes: 30,
+    heartRate: 75,
+    restingHeartRate: 65,
+    sleep: 7,
+    weight: 70,
+    oxygenSaturation: 98,
+    calories: 2000,
+    distance: 4,
 };
 
 
-}
-
 // ============================================================
-// SERIALIZE ANALYSIS
+// NUMBER HELPER
 // ============================================================
 
-function serializeAnalysis(analysis) {
-if (!analysis) {
-return null;
-}
-
-
-return {
-    id:
-        analysis._id,
-
-    analyzedAt:
-        analysis.analyzedAt,
-
-    sourceRecordDate:
-        analysis.sourceRecordDate,
-
-    recordsAnalyzed:
-        analysis.recordsAnalyzed,
-
-    scores:
-        analysis.scores || {},
-
-    dimensions:
-        analysis.dimensions || {},
-
-    forecast:
-        analysis.forecast || {},
-
-    dataQuality:
-        analysis.dataQuality || {},
-
-    missingData:
-        analysis.missingData || [],
-
-    missingDataCount:
-        analysis.missingDataCount || 0,
-
-    modelVersion:
-        analysis.modelVersion ||
-        null,
-};
-
-
-}
-
-// ============================================================
-// GET LATEST HEALTH RECORD
-// ============================================================
-
-exports.mlGetLatestHealthRecord = async (
-req,
-res
-) => {
-try {
-const userId =
-getUserId(req);
-
-
-    if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message:
-                "User authentication required.",
-        });
+function toNumber(value) {
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return null;
     }
 
-    const latestRecord =
-        await HealthRecord.findOne({
-            userId: userId,
-        })
-            .sort({
-                date: -1,
-                syncedAt: -1,
-            })
-            .lean();
+    const number = Number(value);
 
-    return res.status(200).json({
-        success: true,
-
-        data: {
-            latestRecord:
-                latestRecord || null,
-
-            hasHealthRecords:
-                latestRecord !== null,
-        },
-    });
-} catch (error) {
-    console.error(
-        "ML LATEST HEALTH RECORD ERROR:",
-        error
-    );
-
-    return res.status(500).json({
-        success: false,
-        message:
-            "Unable to load the latest health record.",
-        error:
-            error.message,
-    });
+    return Number.isFinite(number)
+        ? number
+        : null;
 }
 
 
-};
-
 // ============================================================
-// RUN ML HEALTH ANALYSIS
+// NUMBER WITH FALLBACK
 // ============================================================
 
-exports.mlAnalyzeHealth = async (
-req,
-res
-) => {
-try {
-const userId =
-getUserId(req);
+function numberOrDefault(
+    value,
+    fallback
+) {
+    const number = toNumber(value);
 
-
-    if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message:
-                "User authentication required.",
-        });
+    if (number === null) {
+        return fallback;
     }
 
-    const {
-        profile = {},
-    } = req.body || {};
+    return number;
+}
 
 
-    // --------------------------------------------------------
-    // ALWAYS LOAD LATEST RECORDS FROM DATABASE
-    //
-    // Flutter does NOT send health records.
-    // Database is the source of truth.
-    // --------------------------------------------------------
+// ============================================================
+// CLAMP VALUE
+// ============================================================
 
-    let healthRecords =
-        await HealthRecord.find({
-            userId: userId,
-        })
-            .sort({
-                date: -1,
-                syncedAt: -1,
-            })
-            .limit(30)
-            .lean();
+function clamp(
+    value,
+    minimum,
+    maximum,
+    fallback = null
+) {
+    let number = toNumber(value);
 
-
-    if (!healthRecords.length) {
-        return res.status(400).json({
-            success: false,
-            message:
-                "No health records available for ML analysis.",
-        });
+    if (number === null) {
+        number = fallback;
     }
 
+    if (number === null) {
+        return null;
+    }
 
-    // Database result is newest → oldest.
-    // ML receives oldest → newest.
-    healthRecords =
-        [...healthRecords]
-            .reverse();
-
-
-    // --------------------------------------------------------
-    // MAP DATABASE SCHEMA → ML SCHEMA
-    // --------------------------------------------------------
-
-    const mlRecords =
-        healthRecords.map(
-            mapDatabaseRecordToMlRecord
-        );
-
-
-    // --------------------------------------------------------
-    // NORMALIZE MISSING VALUES
-    // --------------------------------------------------------
-
-    const normalization =
-        normalizeHealthRecords(
-            mlRecords
-        );
-
-    const normalizedRecords =
-        normalization.records;
-
-    const missingData =
-        normalization.missingData;
-
-    const averages =
-        normalization.averages;
-
-
-    const latestRecord =
-        normalizedRecords[
-            normalizedRecords.length - 1
-        ];
-
-
-    // --------------------------------------------------------
-    // BUILD PROFILE
-    // --------------------------------------------------------
-
-    const mlProfile =
-        buildProfile(profile);
-
-
-    // --------------------------------------------------------
-    // CALL PULSE AI SERVICE
-    // --------------------------------------------------------
-
-    console.log(
-        `[ML Health] Starting analysis for user ${userId}`
+    return Math.min(
+        Math.max(number, minimum),
+        maximum
     );
-
-    console.log(
-        `[ML Health] Records found: ${normalizedRecords.length}`
-    );
-
-    const pulseResponse =
-        await analyzeWithPulseAI(
-            mlProfile,
-            normalizedRecords
-        );
+}
 
 
-    // Support either:
-    //
-    // { data: {...} }
-    //
-    // or:
-    //
-    // {...}
-    const mlResult =
-        pulseResponse?.data ||
-        pulseResponse;
+// ============================================================
+// SAFE BINARY CONVERSION
+//
+// 0 = female / false / no
+// 1 = male / true / yes
+// ============================================================
 
+function toBinary(
+    value,
+    fallback = 0
+) {
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return fallback;
+    }
 
     if (
-        !mlResult ||
-        typeof mlResult !== "object"
+        value === true ||
+        value === 1 ||
+        value === "1"
     ) {
-        throw new Error(
-            "Pulse AI returned an invalid response."
-        );
+        return 1;
     }
 
+    const normalized =
+        String(value)
+            .trim()
+            .toLowerCase();
 
-    // --------------------------------------------------------
-    // EXTRACT RESULTS
-    // --------------------------------------------------------
+    if (
+        normalized === "male" ||
+        normalized === "m" ||
+        normalized === "true" ||
+        normalized === "yes" ||
+        normalized === "y"
+    ) {
+        return 1;
+    }
 
-    const scores =
-        mlResult.scores || {};
+    if (
+        normalized === "female" ||
+        normalized === "f" ||
+        normalized === "false" ||
+        normalized === "no" ||
+        normalized === "n"
+    ) {
+        return 0;
+    }
 
-    const dimensions =
-        extractLatestDimensions(
-            mlResult
-        );
-
-    const forecast =
-        mlResult.forecast || {};
-
-    const dataQuality =
-        mlResult.dataQuality ||
-        mlResult.wellness
-            ?.dataQuality ||
-        {};
-
-
-    // --------------------------------------------------------
-    // SAVE ANALYSIS
-    // --------------------------------------------------------
-
-    const savedAnalysis =
-        await MLHealthAnalysis.create({
-            user:
-                userId,
-
-            analyzedAt:
-                new Date(),
-
-            sourceRecordDate:
-                latestRecord.date ||
-                null,
-
-            recordsAnalyzed:
-                normalizedRecords.length,
-
-            scores,
-
-            dimensions,
-
-            forecast,
-
-            dataQuality,
-
-            missingData:
-                missingData.map(
-                    (item) => ({
-                        field:
-                            item.field,
-
-                        message:
-                            item.message,
-
-                        fallbackValue:
-                            item.fallbackValue,
-                    })
-                ),
-
-            missingDataCount:
-                missingData.length,
-
-            mlResponse:
-                mlResult,
-
-            modelVersion:
-                mlResult.modelVersion ||
-                "pulse-ai",
-        });
-
-
-    console.log(
-        `[ML Health] Analysis completed successfully for user ${userId}`
-    );
-
-
-    return res.status(200).json({
-        success: true,
-
-        source:
-            "pulse-ai",
-
-        message:
-            "ML health analysis completed and saved successfully.",
-
-        data: {
-            ...mlResult,
-
-            latestHealthRecord:
-                latestRecord,
-
-            recordsAnalyzed:
-                normalizedRecords.length,
-
-            averagesUsed:
-                averages,
-
-            missingData,
-
-            missingDataCount:
-                missingData.length,
-
-            savedAnalysis:
-                serializeAnalysis(
-                    savedAnalysis
-                ),
-        },
-    });
-} catch (error) {
-    const errorData =
-        error.response?.data ||
-        error.message ||
-        "Unknown error";
-
-    console.error(
-        "================================================"
-    );
-
-    console.error(
-        "ML HEALTH ANALYSIS ERROR:"
-    );
-
-    console.error(
-        errorData
-    );
-
-    console.error(
-        "================================================"
-    );
-
-    return res.status(
-        error.response?.status || 500
-    ).json({
-        success: false,
-
-        message:
-            "Unable to complete ML health analysis.",
-
-        error:
-            errorData,
-    });
+    return fallback;
 }
 
 
-};
-
 // ============================================================
-// ML DASHBOARD
+// DATE NORMALIZATION
+//
+// FastAPI requires a non-empty string.
 // ============================================================
 
-exports.mlGetDashboard = async (
-req,
-res
-) => {
-try {
-const userId =
-getUserId(req);
-
-
-    if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message:
-                "User authentication required.",
-        });
+function normalizeDate(value) {
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return new Date()
+            .toISOString()
+            .split("T")[0];
     }
 
-    const [
-        latestAnalysis,
-        latestHealthRecord,
-    ] =
-        await Promise.all([
-            MLHealthAnalysis.findOne({
-                user: userId,
-            })
-                .sort({
-                    analyzedAt: -1,
-                })
-                .lean(),
-
-            HealthRecord.findOne({
-                userId: userId,
-            })
-                .sort({
-                    date: -1,
-                    syncedAt: -1,
-                })
-                .lean(),
-        ]);
-
-
-    return res.status(200).json({
-        success: true,
-
-        data: {
-            analysis:
-                latestAnalysis || null,
-
-            latestHealthRecord:
-                latestHealthRecord || null,
-
-            hasHealthRecords:
-                latestHealthRecord !== null,
-
-            notifications:
-                latestAnalysis
-                    ?.missingData ||
-                [],
-        },
-    });
-} catch (error) {
-    console.error(
-        "ML DASHBOARD ERROR:",
-        error
-    );
-
-    return res.status(500).json({
-        success: false,
-        message:
-            "Unable to load ML dashboard.",
-        error:
-            error.message,
-    });
-}
-
-
-};
-
-// ============================================================
-// GET LATEST ML ANALYSIS
-// ============================================================
-
-exports.mlGetLatestAnalysis = async (
-req,
-res
-) => {
-try {
-const userId =
-getUserId(req);
-
-
-    if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message:
-                "User authentication required.",
-        });
-    }
-
-    const analysis =
-        await MLHealthAnalysis.findOne({
-            user: userId,
-        })
-            .sort({
-                analyzedAt: -1,
-            })
-            .lean();
-
-
-    return res.status(200).json({
-        success: true,
-
-        data:
-            analysis
-                ? serializeAnalysis(
-                    analysis
-                )
-                : null,
-    });
-} catch (error) {
-    console.error(
-        "ML LATEST ANALYSIS ERROR:",
-        error
-    );
-
-    return res.status(500).json({
-        success: false,
-        message:
-            "Unable to load latest ML analysis.",
-        error:
-            error.message,
-    });
-}
-
-
-};
-
-// ============================================================
-// ML HEALTH HISTORY
-// ============================================================
-
-exports.mlGetHistory = async (
-req,
-res
-) => {
-try {
-const userId =
-getUserId(req);
-
-
-    if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message:
-                "User authentication required.",
-        });
-    }
-
-    const days =
-        Math.max(
-            1,
-            Math.min(
-                Number(req.query.days) || 30,
-                365
+    if (value instanceof Date) {
+        if (
+            !Number.isNaN(
+                value.getTime()
             )
-        );
+        ) {
+            return value
+                .toISOString()
+                .split("T")[0];
+        }
+    }
 
-    const limit =
-        Math.max(
-            1,
-            Math.min(
-                Number(req.query.limit) || 100,
-                365
-            )
-        );
+    if (typeof value === "string") {
+        const trimmed = value.trim();
 
-    const startDate =
-        new Date();
+        if (trimmed) {
+            const parsed =
+                new Date(trimmed);
 
-    startDate.setDate(
-        startDate.getDate() - days
-    );
-
-
-    const history =
-        await MLHealthAnalysis.find({
-            user: userId,
-
-            analyzedAt: {
-                $gte: startDate,
-            },
-        })
-            .sort({
-                analyzedAt: -1,
-            })
-            .limit(limit)
-            .lean();
-
-
-    const formattedHistory =
-        history.map(
-            (item) =>
-                serializeAnalysis(
-                    item
+            if (
+                !Number.isNaN(
+                    parsed.getTime()
                 )
+            ) {
+                return parsed
+                    .toISOString()
+                    .split("T")[0];
+            }
+
+            // Return string if already a date-like
+            // value accepted by FastAPI.
+            return trimmed;
+        }
+    }
+
+    const parsedDate =
+        new Date(value);
+
+    if (
+        !Number.isNaN(
+            parsedDate.getTime()
+        )
+    ) {
+        return parsedDate
+            .toISOString()
+            .split("T")[0];
+    }
+
+    return new Date()
+        .toISOString()
+        .split("T")[0];
+}
+
+
+// ============================================================
+// GET FIRST AVAILABLE VALUE
+// ============================================================
+
+function firstAvailable(...values) {
+    for (const value of values) {
+        if (
+            value !== null &&
+            value !== undefined &&
+            value !== ""
+        ) {
+            return value;
+        }
+    }
+
+    return null;
+}
+
+
+// ============================================================
+// PROFILE NORMALIZATION
+//
+// Converts Node/database profile fields into the exact
+// structure expected by the Pulse AI API.
+// ============================================================
+
+function normalizeProfile(profile = {}) {
+    return {
+        age:
+            clamp(
+                firstAvailable(
+                    profile.age,
+                    profile.age_years
+                ),
+                1,
+                120,
+                DEFAULTS.age
+            ),
+
+        sex:
+            toBinary(
+                firstAvailable(
+                    profile.sex,
+                    profile.gender
+                ),
+                DEFAULTS.sex
+            ),
+
+        height_cm:
+            clamp(
+                firstAvailable(
+                    profile.height_cm,
+                    profile.height
+                ),
+                50,
+                250,
+                DEFAULTS.height_cm
+            ),
+
+        weight_kg:
+            clamp(
+                firstAvailable(
+                    profile.weight_kg,
+                    profile.weight
+                ),
+                10,
+                300,
+                DEFAULTS.weight_kg
+            ),
+
+        bmi:
+            clamp(
+                profile.bmi,
+                5,
+                100,
+                DEFAULTS.bmi
+            ),
+
+        waist_cm:
+            clamp(
+                firstAvailable(
+                    profile.waist_cm,
+                    profile.waist
+                ),
+                20,
+                250,
+                DEFAULTS.waist_cm
+            ),
+
+        heart_rate:
+            clamp(
+                firstAvailable(
+                    profile.heart_rate,
+                    profile.heartRate
+                ),
+                20,
+                250,
+                DEFAULTS.heart_rate
+            ),
+
+        activity_minutes:
+            clamp(
+                firstAvailable(
+                    profile.activity_minutes,
+                    profile.activityMinutes
+                ),
+                0,
+                2000,
+                DEFAULTS.activity_minutes
+            ),
+
+        sleep_hours:
+            clamp(
+                firstAvailable(
+                    profile.sleep_hours,
+                    profile.sleepHours
+                ),
+                0,
+                24,
+                DEFAULTS.sleep_hours
+            ),
+
+        smoking:
+            toBinary(
+                firstAvailable(
+                    profile.smoking,
+                    profile.smoke
+                ),
+                DEFAULTS.smoking
+            ),
+
+        alcohol:
+            toBinary(
+                profile.alcohol,
+                DEFAULTS.alcohol
+            ),
+    };
+}
+
+
+// ============================================================
+// HEALTH RECORD NORMALIZATION
+//
+// Database schema aliases are converted to the exact ML API
+// field names.
+// ============================================================
+
+function normalizeHealthRecord(record = {}) {
+    return {
+        date:
+            normalizeDate(
+                firstAvailable(
+                    record.date,
+                    record.recordedAt,
+                    record.createdAt,
+                    record.syncedAt
+                )
+            ),
+
+        steps:
+            clamp(
+                record.steps,
+                0,
+                200000,
+                DEFAULTS.steps
+            ),
+
+        activeHours:
+            clamp(
+                firstAvailable(
+                    record.activeHours,
+                    record.activityHours
+                ),
+                0,
+                24,
+                DEFAULTS.activeHours
+            ),
+
+        activeZoneMinutes:
+            clamp(
+                firstAvailable(
+                    record.activeZoneMinutes,
+                    record.activeMinutes
+                ),
+                0,
+                1440,
+                DEFAULTS.activeZoneMinutes
+            ),
+
+        heartRate:
+            clamp(
+                firstAvailable(
+                    record.heartRate,
+                    record.averageHeartRate
+                ),
+                20,
+                250,
+                DEFAULTS.heartRate
+            ),
+
+        restingHeartRate:
+            clamp(
+                record.restingHeartRate,
+                20,
+                200,
+                DEFAULTS.restingHeartRate
+            ),
+
+        sleep:
+            clamp(
+                firstAvailable(
+                    record.sleep,
+                    record.sleepHours
+                ),
+                0,
+                24,
+                DEFAULTS.sleep
+            ),
+
+        weight:
+            clamp(
+                record.weight,
+                10,
+                300,
+                DEFAULTS.weight
+            ),
+
+        bmi:
+            clamp(
+                record.bmi,
+                5,
+                100,
+                DEFAULTS.bmi
+            ),
+
+        oxygenSaturation:
+            clamp(
+                firstAvailable(
+                    record.oxygenSaturation,
+                    record.bloodOxygen
+                ),
+                50,
+                100,
+                DEFAULTS.oxygenSaturation
+            ),
+
+        calories:
+            clamp(
+                firstAvailable(
+                    record.calories,
+                    record.caloriesBurned
+                ),
+                0,
+                20000,
+                DEFAULTS.calories
+            ),
+
+        distance:
+            clamp(
+                firstAvailable(
+                    record.distance,
+                    record.distanceWalked
+                ),
+                0,
+                1000,
+                DEFAULTS.distance
+            ),
+    };
+}
+
+
+// ============================================================
+// ANALYZE WITH PULSE AI
+// ============================================================
+
+async function analyzeWithPulseAI(
+    profile = {},
+    healthRecords = []
+) {
+    try {
+        // ----------------------------------------------------
+        // NORMALIZE PROFILE
+        // ----------------------------------------------------
+
+        const normalizedProfile =
+            normalizeProfile(profile);
+
+
+        // ----------------------------------------------------
+        // NORMALIZE HEALTH RECORDS
+        // ----------------------------------------------------
+
+        let normalizedRecords = [];
+
+        if (Array.isArray(healthRecords)) {
+            normalizedRecords =
+                healthRecords.map(
+                    (record) =>
+                        normalizeHealthRecord(
+                            record || {}
+                        )
+                );
+        }
+
+
+        // ----------------------------------------------------
+        // ENSURE AT LEAST ONE RECORD EXISTS
+        // ----------------------------------------------------
+
+        if (normalizedRecords.length === 0) {
+            normalizedRecords.push(
+                normalizeHealthRecord({})
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // BUILD EXACT FASTAPI PAYLOAD
+        // ----------------------------------------------------
+
+        const payload = {
+            profile:
+                normalizedProfile,
+
+            health_records:
+                normalizedRecords,
+        };
+
+
+        // ----------------------------------------------------
+        // DEBUG LOGGING
+        // ----------------------------------------------------
+
+        console.log(
+            "\n========================================"
+        );
+
+        console.log(
+            "[Pulse AI] Starting ML analysis"
+        );
+
+        console.log(
+            "[Pulse AI] Request URL:",
+            PULSE_AI_URL
+        );
+
+        console.log(
+            "[Pulse AI] Health records:",
+            normalizedRecords.length
+        );
+
+        console.log(
+            "[Pulse AI] Profile:"
+        );
+
+        console.dir(
+            normalizedProfile,
+            {
+                depth: null,
+            }
+        );
+
+        console.log(
+            "[Pulse AI] Latest record:"
+        );
+
+        console.dir(
+            normalizedRecords[
+                normalizedRecords.length - 1
+            ],
+            {
+                depth: null,
+            }
+        );
+
+        console.log(
+            "[Pulse AI] Full payload:"
+        );
+
+        console.dir(
+            payload,
+            {
+                depth: null,
+            }
+        );
+
+        console.log(
+            "========================================\n"
         );
 
 
-    return res.status(200).json({
-        success: true,
+        // ----------------------------------------------------
+        // CALL FASTAPI
+        // ----------------------------------------------------
 
-        data: {
-            history:
-                formattedHistory,
+        const response =
+            await pulseAiClient.post(
+                PULSE_AI_URL,
+                payload
+            );
 
-            count:
-                formattedHistory.length,
 
-            days,
-        },
-    });
-} catch (error) {
-    console.error(
-        "ML HISTORY ERROR:",
-        error
-    );
+        console.log(
+            "[Pulse AI] Analysis successful."
+        );
 
-    return res.status(500).json({
-        success: false,
-        message:
-            "Unable to load ML history.",
-        error:
-            error.message,
-    });
+
+        if (!response.data) {
+            throw new Error(
+                "Pulse AI returned an empty response."
+            );
+        }
+
+
+        return response.data;
+    } catch (error) {
+        console.error(
+            "\n========================================"
+        );
+
+        console.error(
+            "[Pulse AI] SERVICE ERROR"
+        );
+
+        if (error.response) {
+            console.error(
+                "[Pulse AI] HTTP Status:",
+                error.response.status
+            );
+
+            console.error(
+                "[Pulse AI] Response data:"
+            );
+
+            console.dir(
+                error.response.data,
+                {
+                    depth: null,
+                }
+            );
+
+            console.error(
+                "[Pulse AI] Request URL:",
+                PULSE_AI_URL
+            );
+        } else if (error.request) {
+            console.error(
+                "[Pulse AI] No response received."
+            );
+
+            console.error(
+                "[Pulse AI] Request URL:",
+                PULSE_AI_URL
+            );
+
+            console.error(
+                "[Pulse AI] Possible causes:"
+            );
+
+            console.error(
+                "- Pulse AI service is not running"
+            );
+
+            console.error(
+                "- Incorrect PULSE_AI_URL"
+            );
+
+            console.error(
+                "- Network/firewall connection issue"
+            );
+
+            console.error(
+                "- Request timed out"
+            );
+        } else {
+            console.error(
+                "[Pulse AI] Error:",
+                error.message
+            );
+        }
+
+        console.error(
+            "========================================\n"
+        );
+
+        throw error;
+    }
 }
 
 
-};
-
 // ============================================================
-// ML HEALTH IMPROVEMENT
+// MODULE EXPORTS
 // ============================================================
 
-exports.mlGetImprovement = async (
-req,
-res
-) => {
-try {
-const userId =
-getUserId(req);
-
-
-    if (!userId) {
-        return res.status(401).json({
-            success: false,
-            message:
-                "User authentication required.",
-        });
-    }
-
-    const analyses =
-        await MLHealthAnalysis.find({
-            user: userId,
-        })
-            .sort({
-                analyzedAt: 1,
-            })
-            .limit(365)
-            .lean();
-
-
-    if (analyses.length < 2) {
-        return res.status(200).json({
-            success: true,
-
-            data: {
-                available: false,
-
-                message:
-                    "At least two ML analyses are required to calculate improvement.",
-            },
-        });
-    }
-
-
-    const first =
-        analyses[0];
-
-    const latest =
-        analyses[
-            analyses.length - 1
-        ];
-
-
-    return res.status(200).json({
-        success: true,
-
-        data: {
-            available: true,
-
-            firstAnalysis:
-                serializeAnalysis(
-                    first
-                ),
-
-            latestAnalysis:
-                serializeAnalysis(
-                    latest
-                ),
-
-            totalAnalyses:
-                analyses.length,
-        },
-    });
-} catch (error) {
-    console.error(
-        "ML IMPROVEMENT ERROR:",
-        error
-    );
-
-    return res.status(500).json({
-        success: false,
-        message:
-            "Unable to calculate ML improvement.",
-        error:
-            error.message,
-    });
-}
-
-
+module.exports = {
+    analyzeWithPulseAI,
+    normalizeProfile,
+    normalizeHealthRecord,
 };
