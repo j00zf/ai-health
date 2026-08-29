@@ -1,10 +1,10 @@
+import torch
 import torch.nn as nn
 
-from torchvision.models import (
-    efficientnet_b0,
-    EfficientNet_B0_Weights
-)
 
+# ==========================================
+# FACIAL STRESS CNN
+# ==========================================
 
 class FacialStressModel(nn.Module):
 
@@ -13,79 +13,124 @@ class FacialStressModel(nn.Module):
         super().__init__()
 
 
-        # ----------------------------------
-        # PRETRAINED BACKBONE
-        # ----------------------------------
+        # ==================================
+        # FEATURE EXTRACTION
+        # ==================================
 
-        self.backbone = efficientnet_b0(
+        self.features = nn.Sequential(
 
-            weights=EfficientNet_B0_Weights.DEFAULT
+            # ------------------------------
+            # BLOCK 1
+            # ------------------------------
+
+            nn.Conv2d(
+                in_channels=1,
+                out_channels=32,
+                kernel_size=3,
+                padding=1
+            ),
+
+            nn.BatchNorm2d(32),
+
+            nn.ReLU(),
+
+            nn.MaxPool2d(
+                kernel_size=2
+            ),
+
+
+            # ------------------------------
+            # BLOCK 2
+            # ------------------------------
+
+            nn.Conv2d(
+                in_channels=32,
+                out_channels=64,
+                kernel_size=3,
+                padding=1
+            ),
+
+            nn.BatchNorm2d(64),
+
+            nn.ReLU(),
+
+            nn.MaxPool2d(
+                kernel_size=2
+            ),
+
+
+            # ------------------------------
+            # BLOCK 3
+            # ------------------------------
+
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=128,
+                kernel_size=3,
+                padding=1
+            ),
+
+            nn.BatchNorm2d(128),
+
+            nn.ReLU(),
+
+            nn.MaxPool2d(
+                kernel_size=2
+            )
 
         )
 
 
-        # ----------------------------------
-        # GET FEATURE SIZE
-        # ----------------------------------
+        # ==================================
+        # GLOBAL POOLING
+        # ==================================
 
-        input_features = (
-
-            self.backbone
-            .classifier[1]
-            .in_features
-
+        self.global_pool = nn.AdaptiveAvgPool2d(
+            (1, 1)
         )
 
 
-        # ----------------------------------
-        # REMOVE ORIGINAL CLASSIFIER
-        # ----------------------------------
-
-        self.backbone.classifier = nn.Identity()
-
-
-        # ----------------------------------
-        # CUSTOM STRESS CLASSIFIER
-        # ----------------------------------
+        # ==================================
+        # CLASSIFIER
+        # ==================================
 
         self.classifier = nn.Sequential(
 
-            nn.Linear(
-                input_features,
-                512
+            nn.Flatten(),
+
+            nn.Dropout(
+                0.4
             ),
-
-            nn.BatchNorm1d(512),
-
-            nn.ReLU(),
-
-            nn.Dropout(0.4),
-
-
-            nn.Linear(
-                512,
-                128
-            ),
-
-            nn.BatchNorm1d(128),
-
-            nn.ReLU(),
-
-            nn.Dropout(0.3),
-
 
             nn.Linear(
                 128,
+                64
+            ),
+
+            nn.ReLU(),
+
+            nn.Dropout(
+                0.3
+            ),
+
+            nn.Linear(
+                64,
                 num_classes
             )
 
         )
 
 
+    # ======================================
+    # FORWARD PASS
+    # ======================================
+
     def forward(self, x):
 
-        features = self.backbone(x)
+        x = self.features(x)
 
-        output = self.classifier(features)
+        x = self.global_pool(x)
 
-        return output
+        x = self.classifier(x)
+
+        return x

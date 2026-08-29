@@ -37,16 +37,16 @@ OUTPUTS_DIR.mkdir(
 
 
 # ==========================================
-# MODEL CONFIGURATION
+# DATA CONFIGURATION
 # ==========================================
 
-IMAGE_SIZE = 224
+IMAGE_SIZE = 48
 
 NUM_CLASSES = 2
 
 CLASS_NAMES = [
-    "Non-Stress",
-    "Stress"
+    "Class 0",
+    "Class 1"
 ]
 
 
@@ -54,15 +54,24 @@ CLASS_NAMES = [
 # TRAINING CONFIGURATION
 # ==========================================
 
-BATCH_SIZE = 32
+BATCH_SIZE = 8
 
-NUM_EPOCHS = 20
+NUM_EPOCHS = 100
 
-LEARNING_RATE = 0.0003
+LEARNING_RATE = 0.001
 
 WEIGHT_DECAY = 1e-4
 
 NUM_WORKERS = 0
+
+RANDOM_SEED = 42
+
+
+# ==========================================
+# EARLY STOPPING
+# ==========================================
+
+EARLY_STOPPING_PATIENCE = 15
 
 
 # ==========================================
@@ -77,10 +86,10 @@ DEVICE = (
 
 
 # ==========================================
-# MODEL FILE
+# MODEL PATH
 # ==========================================
 
 MODEL_PATH = (
-    MODELS_DIR /
-    "facial_stress_model.pth"
+    MODELS_DIR
+    / "facial_stress_model.pth"
 )
