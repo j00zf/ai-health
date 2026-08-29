@@ -9,3 +9,6 @@ matplotlib
 seaborn
 tqdm
 pillow
+fastapi 
+python-multipart
+uvicorn 
