@@ -1,0 +1,24 @@
+{
+    "model_name": "Facial Stress CNN",
+    "model_version": "V1",
+    "selected_as": "production model",
+    "source_epoch": 2,
+    "input": {
+        "channels": 1,
+        "width": 48,
+        "height": 48
+    },
+    "classes": [
+        "Class 0",
+        "Class 1"
+    ],
+    "normalization": {
+        "mean": [
+            0.5
+        ],
+        "std": [
+            0.5
+        ]
+    },
+    "framework": "PyTorch"
+}
