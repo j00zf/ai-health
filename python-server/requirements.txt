@@ -1,8 +1,0 @@
-FastAPI
-Uvicorn
-Pydantic
-NumPy
-Pandas
-Scikit-learn
-Joblib
-XGBoost
