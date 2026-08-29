@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import numpy as np
 import torch
 
@@ -35,6 +38,20 @@ from src.model import (
 from src.train import (
     create_splits,
     set_seed
+)
+
+
+# ============================================================
+# OUTPUT CONFIGURATION
+# ============================================================
+
+OUTPUT_DIR = Path(
+    "outputs"
+)
+
+OUTPUT_FILE = (
+    OUTPUT_DIR /
+    "v1_results.json"
 )
 
 
@@ -173,6 +190,241 @@ def evaluate_model(model, loader):
         np.array(all_probabilities)
 
     )
+
+
+# ============================================================
+# SAVE RESULTS
+# ============================================================
+
+def save_results(
+
+    accuracy,
+    precision,
+    recall,
+    f1,
+    support,
+    cm,
+    checkpoint,
+    y_true,
+    y_pred,
+    probabilities
+
+):
+
+    OUTPUT_DIR.mkdir(
+
+        exist_ok=True
+
+    )
+
+
+    individual_predictions = []
+
+
+    for index in range(
+
+        len(y_true)
+
+    ):
+
+        predicted_class = int(
+
+            y_pred[index]
+
+        )
+
+
+        actual_class = int(
+
+            y_true[index]
+
+        )
+
+
+        confidence = float(
+
+            probabilities[index][
+                predicted_class
+            ]
+
+        )
+
+
+        individual_predictions.append({
+
+            "sample":
+
+                int(index + 1),
+
+            "actual_class_index":
+
+                actual_class,
+
+            "actual_class":
+
+                CLASS_NAMES[
+                    actual_class
+                ],
+
+            "predicted_class_index":
+
+                predicted_class,
+
+            "predicted_class":
+
+                CLASS_NAMES[
+                    predicted_class
+                ],
+
+            "confidence":
+
+                confidence,
+
+            "correct":
+
+                bool(
+                    actual_class
+                    ==
+                    predicted_class
+                )
+
+        })
+
+
+    results = {
+
+        "model_version":
+
+            "V1",
+
+        "model_epoch":
+
+            int(
+                checkpoint.get(
+                    "epoch",
+                    -1
+                )
+            ),
+
+        "test_accuracy":
+
+            float(
+                accuracy
+            ),
+
+        "test_accuracy_percent":
+
+            float(
+                accuracy * 100
+            ),
+
+        "test_samples":
+
+            int(
+                len(y_true)
+            ),
+
+        "class_metrics": {
+
+            "class_0": {
+
+                "class_name":
+
+                    CLASS_NAMES[0],
+
+                "precision":
+
+                    float(
+                        precision[0]
+                    ),
+
+                "recall":
+
+                    float(
+                        recall[0]
+                    ),
+
+                "f1_score":
+
+                    float(
+                        f1[0]
+                    ),
+
+                "support":
+
+                    int(
+                        support[0]
+                    )
+
+            },
+
+            "class_1": {
+
+                "class_name":
+
+                    CLASS_NAMES[1],
+
+                "precision":
+
+                    float(
+                        precision[1]
+                    ),
+
+                "recall":
+
+                    float(
+                        recall[1]
+                    ),
+
+                "f1_score":
+
+                    float(
+                        f1[1]
+                    ),
+
+                "support":
+
+                    int(
+                        support[1]
+                    )
+
+            }
+
+        },
+
+        "confusion_matrix":
+
+            cm.tolist(),
+
+        "individual_predictions":
+
+            individual_predictions
+
+    }
+
+
+    with open(
+
+        OUTPUT_FILE,
+
+        "w",
+
+        encoding="utf-8"
+
+    ) as file:
+
+        json.dump(
+
+            results,
+
+            file,
+
+            indent=4
+
+        )
+
+
+    return OUTPUT_FILE
 
 
 # ============================================================
@@ -408,8 +660,11 @@ def main():
     print("=" * 70)
 
 
-    for index, class_name in enumerate(CLASS_NAMES):
+    for index, class_name in enumerate(
 
+        CLASS_NAMES
+
+    ):
 
         print(
 
@@ -553,7 +808,6 @@ def main():
 
     ):
 
-
         predicted_probability = (
 
             probabilities[index][
@@ -617,6 +871,51 @@ def main():
             f"Status: {status}"
 
         )
+
+
+    # --------------------------------------------------------
+    # SAVE V1 RESULTS
+    # --------------------------------------------------------
+
+    saved_file = save_results(
+
+        accuracy=accuracy,
+
+        precision=precision,
+
+        recall=recall,
+
+        f1=f1,
+
+        support=support,
+
+        cm=cm,
+
+        checkpoint=checkpoint,
+
+        y_true=y_true,
+
+        y_pred=y_pred,
+
+        probabilities=probabilities
+
+    )
+
+
+    print("\n" + "=" * 70)
+
+    print(
+        "RESULTS SAVED"
+    )
+
+    print("=" * 70)
+
+
+    print(
+
+        f"\n{saved_file}"
+
+    )
 
 
     # --------------------------------------------------------
