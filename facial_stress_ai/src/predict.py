@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 
+import cv2
 import torch
 from PIL import Image
 from torchvision import transforms
@@ -12,6 +13,10 @@ from src.config import (
 )
 
 from src.model import FacialStressModel
+
+from src.face_detector import (
+    detect_face
+)
 
 
 # ==========================================
@@ -47,19 +52,15 @@ def load_model():
     if not MODEL_PATH.exists():
 
         raise FileNotFoundError(
-
             f"Model not found:\n{MODEL_PATH}"
-
         )
 
 
-    # Create model architecture
     model = FacialStressModel(
         num_classes=2
     )
 
 
-    # Load checkpoint
     checkpoint = torch.load(
 
         MODEL_PATH,
@@ -71,7 +72,6 @@ def load_model():
     )
 
 
-    # Load trained weights
     model.load_state_dict(
 
         checkpoint[
@@ -81,13 +81,11 @@ def load_model():
     )
 
 
-    # Move model to device
     model = model.to(
         DEVICE
     )
 
 
-    # Evaluation mode
     model.eval()
 
 
@@ -95,40 +93,46 @@ def load_model():
 
 
 # ==========================================
-# PREPROCESS IMAGE
+# PREPROCESS FACE
 # ==========================================
 
-def preprocess_image(image_path):
+def preprocess_face(face_image):
 
-    image_path = Path(
-        image_path
+    # --------------------------------------
+    # OpenCV BGR → RGB
+    # --------------------------------------
+
+    face_rgb = cv2.cvtColor(
+
+        face_image,
+
+        cv2.COLOR_BGR2RGB
+
     )
 
 
-    if not image_path.exists():
+    # --------------------------------------
+    # Convert to PIL
+    # --------------------------------------
 
-        raise FileNotFoundError(
-
-            f"Image not found:\n{image_path}"
-
-        )
-
-
-    # Open image
-    image = Image.open(
-        image_path
-    ).convert(
-        "RGB"
+    image = Image.fromarray(
+        face_rgb
     )
 
 
-    # Apply transform
+    # --------------------------------------
+    # Apply transforms
+    # --------------------------------------
+
     image_tensor = PREDICT_TRANSFORM(
         image
     )
 
 
+    # --------------------------------------
     # Add batch dimension
+    # --------------------------------------
+
     image_tensor = image_tensor.unsqueeze(
         0
     )
@@ -143,23 +147,57 @@ def preprocess_image(image_path):
 
 def predict(image_path):
 
-    # Load model
-    model, checkpoint = load_model()
+    # --------------------------------------
+    # DETECT FACE
+    # --------------------------------------
 
-
-    # Preprocess image
-    image_tensor = preprocess_image(
+    face_result = detect_face(
         image_path
     )
 
 
-    # Move to device
+    if face_result is None:
+
+        return {
+
+            "success": False,
+
+            "error": (
+                "No face detected in image"
+            )
+
+        }
+
+
+    # --------------------------------------
+    # LOAD MODEL
+    # --------------------------------------
+
+    model, checkpoint = load_model()
+
+
+    # --------------------------------------
+    # PREPROCESS FACE
+    # --------------------------------------
+
+    image_tensor = preprocess_face(
+
+        face_result[
+            "face_image"
+        ]
+
+    )
+
+
     image_tensor = image_tensor.to(
         DEVICE
     )
 
 
-    # Disable gradients
+    # --------------------------------------
+    # MODEL INFERENCE
+    # --------------------------------------
+
     with torch.no_grad():
 
         outputs = model(
@@ -176,7 +214,10 @@ def predict(image_path):
         )
 
 
-    # Get predicted class
+    # --------------------------------------
+    # PREDICT CLASS
+    # --------------------------------------
+
     predicted_index = torch.argmax(
 
         probabilities,
@@ -186,8 +227,11 @@ def predict(image_path):
     ).item()
 
 
-    # Convert probabilities
-    probabilities = probabilities.squeeze().cpu()
+    probabilities = (
+        probabilities
+        .squeeze()
+        .cpu()
+    )
 
 
     class_0_probability = float(
@@ -201,14 +245,21 @@ def predict(image_path):
 
 
     confidence = float(
+
         probabilities[
             predicted_index
         ].item()
+
     )
 
 
-    # Create result
+    # --------------------------------------
+    # CREATE RESULT
+    # --------------------------------------
+
     result = {
+
+        "success": True,
 
         "predicted_class_index":
             predicted_index,
@@ -230,7 +281,17 @@ def predict(image_path):
         "model_epoch":
             checkpoint.get(
                 "epoch"
-            )
+            ),
+
+        "faces_detected":
+            face_result[
+                "faces_detected"
+            ],
+
+        "face_bounding_box":
+            face_result[
+                "bounding_box"
+            ]
 
     }
 
@@ -275,6 +336,41 @@ def main():
     )
 
 
+    # --------------------------------------
+    # ERROR
+    # --------------------------------------
+
+    if not result["success"]:
+
+        print(
+            f"\nError: "
+            f"{result['error']}"
+        )
+
+        return
+
+
+    # --------------------------------------
+    # RESULTS
+    # --------------------------------------
+
+    print(
+        f"\nFaces detected: "
+        f"{result['faces_detected']}"
+    )
+
+
+    print(
+        f"\nFace bounding box:"
+    )
+
+    print(
+        result[
+            "face_bounding_box"
+        ]
+    )
+
+
     print(
         f"\nPredicted Class: "
         f"{result['predicted_class']}"
@@ -306,6 +402,12 @@ def main():
 
 
     print("\n" + "=" * 60)
+
+    print(
+        "PREDICTION COMPLETE"
+    )
+
+    print("=" * 60)
 
 
 if __name__ == "__main__":
