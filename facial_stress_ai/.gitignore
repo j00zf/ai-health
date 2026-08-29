@@ -95,3 +95,6 @@ desktop.ini
 *.tmp
 *.temp
 *.bak
+
+
+src/__pycache__/
