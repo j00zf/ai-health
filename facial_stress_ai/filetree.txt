@@ -1,0 +1,25 @@
+facial_stress_ai/
+│
+├── .gitignore
+├── requirements.txt
+├── README.md
+│
+├── data/
+│   ├── .gitkeep
+│   ├── raw/
+│   ├── cleaned/
+│   └── processed/
+│
+├── models/
+│   └── .gitkeep
+│
+├── outputs/
+│
+└── src/
+    ├── __init__.py
+    ├── config.py
+    ├── dataset.py
+    ├── model.py
+    ├── train.py
+    ├── evaluate.py
+    └── predict.py

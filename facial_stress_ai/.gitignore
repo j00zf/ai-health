@@ -1,0 +1,97 @@
+# =========================================
+# Python
+# =========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================================
+# Jupyter
+# =========================================
+.ipynb_checkpoints/
+
+# =========================================
+# IDE
+# =========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================================
+# Environment variables
+# =========================================
+.env
+.env.*
+!.env.example
+
+# =========================================
+# Dataset
+# Do not upload large datasets to Git
+# =========================================
+data/raw/
+data/cleaned/
+data/processed/
+
+# Keep folder structure
+!data/.gitkeep
+!data/raw/.gitkeep
+!data/cleaned/.gitkeep
+!data/processed/.gitkeep
+
+# =========================================
+# Trained models and checkpoints
+# =========================================
+models/*.pth
+models/*.pt
+models/*.onnx
+checkpoints/
+*.ckpt
+
+# Keep model directory
+!models/.gitkeep
+
+# =========================================
+# Training outputs
+# =========================================
+outputs/
+runs/
+logs/
+
+# =========================================
+# Large files
+# =========================================
+*.zip
+*.rar
+*.7z
+
+# =========================================
+# OS files
+# =========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================================
+# Temporary files
+# =========================================
+*.tmp
+*.temp
+*.bak
