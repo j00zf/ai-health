@@ -25,10 +25,6 @@ from src.face_detector import (
 
 PREDICT_TRANSFORM = transforms.Compose([
 
-    transforms.Grayscale(
-        num_output_channels=1
-    ),
-
     transforms.Resize(
         (48, 48)
     ),
@@ -36,8 +32,8 @@ PREDICT_TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
 
     transforms.Normalize(
-        mean=[0.5],
-        std=[0.5]
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5]
     )
 
 ])

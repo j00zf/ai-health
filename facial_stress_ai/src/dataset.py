@@ -31,6 +31,10 @@ TRAIN_TRANSFORM = transforms.Compose([
 
     transforms.ToPILImage(),
 
+    transforms.Grayscale(
+        num_output_channels=3
+    ),
+
     transforms.RandomHorizontalFlip(
         p=0.5
     ),
@@ -47,8 +51,8 @@ TRAIN_TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
 
     transforms.Normalize(
-        mean=[0.5],
-        std=[0.5]
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5]
     )
 
 ])
@@ -62,11 +66,15 @@ EVAL_TRANSFORM = transforms.Compose([
 
     transforms.ToPILImage(),
 
+    transforms.Grayscale(
+        num_output_channels=3
+    ),
+
     transforms.ToTensor(),
 
     transforms.Normalize(
-        mean=[0.5],
-        std=[0.5]
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5]
     )
 
 ])
