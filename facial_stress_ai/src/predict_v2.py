@@ -445,7 +445,7 @@ def main():
 
     print(
 
-        f"\nClass 0 Probability: "
+        f"\nNon-Stress Probability: "
 
         f"{result['class_0_probability'] * 100:.2f}%"
 
@@ -454,7 +454,7 @@ def main():
 
     print(
 
-        f"Class 1 Probability: "
+        f"Stress Probability: "
 
         f"{result['class_1_probability'] * 100:.2f}%"
 

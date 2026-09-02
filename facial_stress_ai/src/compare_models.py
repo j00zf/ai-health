@@ -121,7 +121,7 @@ def normalize_results(data):
                         "class_0"
                     ].get(
                         "class_name",
-                        "Class 0"
+                        "Non-Stress"
                     ),
 
 
@@ -181,7 +181,7 @@ def normalize_results(data):
                         "class_1"
                     ].get(
                         "class_name",
-                        "Class 1"
+                        "Stress"
                     ),
 
 
@@ -295,7 +295,7 @@ def normalize_results(data):
                     {}
                 ).get(
                     "class_name",
-                    "Class 0"
+                    "Non-Stress"
                 ),
 
 
@@ -356,7 +356,7 @@ def normalize_results(data):
                     {}
                 ).get(
                     "class_name",
-                    "Class 1"
+                    "Stress"
                 ),
 
 
@@ -556,7 +556,7 @@ def main():
 
         (
 
-            "Class 0 F1",
+            "Non-Stress F1",
 
             v1[
                 "class_0"
@@ -574,7 +574,7 @@ def main():
 
         (
 
-            "Class 1 F1",
+            "Stress F1",
 
             v1[
                 "class_1"

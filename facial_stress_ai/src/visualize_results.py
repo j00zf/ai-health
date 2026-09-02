@@ -207,11 +207,11 @@ def plot_confusion_matrix(
 
 
     ax.set_xticklabels(
-        ["Class 0", "Class 1"]
+        ["Non-Stress", "Stress"]
     )
 
     ax.set_yticklabels(
-        ["Class 0", "Class 1"]
+        ["Non-Stress", "Stress"]
     )
 
 
@@ -383,9 +383,9 @@ def plot_f1_comparison(
 
     classes = [
 
-        "Class 0",
+        "Non-Stress",
 
-        "Class 1"
+        "Stress"
 
     ]
 
@@ -511,9 +511,9 @@ def plot_combined_comparison(
 
         "Accuracy",
 
-        "Class 0 F1",
+        "Non-Stress F1",
 
-        "Class 1 F1"
+        "Stress F1"
 
     ]
 

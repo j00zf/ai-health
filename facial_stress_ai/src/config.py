@@ -45,8 +45,8 @@ IMAGE_SIZE = 48
 NUM_CLASSES = 2
 
 CLASS_NAMES = [
-    "Class 0",
-    "Class 1"
+    "Non-Stress",
+    "Stress"
 ]
 
 

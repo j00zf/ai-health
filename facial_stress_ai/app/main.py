@@ -109,7 +109,7 @@ def model_info():
         "model_version": "V1",
         "status": "production-prototype",
         "input_shape": [1, 48, 48],
-        "classes": ["Class 0", "Class 1"],
+        "classes": ["Non-Stress", "Stress"],
         "positive_class_index": POSITIVE_CLASS_INDEX,
         "label_mapping_verified": LABEL_MAPPING_VERIFIED,
         "disclaimer": (

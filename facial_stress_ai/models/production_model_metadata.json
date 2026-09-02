@@ -9,8 +9,8 @@
         "height": 48
     },
     "classes": [
-        "Class 0",
-        "Class 1"
+        "Non-Stress",
+        "Stress"
     ],
     "normalization": {
         "mean": [

@@ -504,9 +504,9 @@ def main():
 
             target_names=[
 
-                "Class 0",
+                "Non-Stress",
 
-                "Class 1"
+                "Stress"
 
             ],
 
