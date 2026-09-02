@@ -153,6 +153,28 @@ class _CVSummaryScreenState
           children: [
             Expanded(
               child: _summaryCard(
+                'Avg. stress signal',
+                _percent(summary['averageStress']),
+                Icons.psychology_alt_rounded,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _summaryCard(
+                'Model confidence',
+                _percent(summary['averageStressConfidence']),
+                Icons.verified_outlined,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        Row(
+          children: [
+            Expanded(
+              child: _summaryCard(
                 'Avg. fatigue',
                 _percent(
                   summary[
@@ -315,6 +337,11 @@ class _CVSummaryScreenState
   Widget _trendItem(
     Map<String, dynamic> item,
   ) {
+    final stress =
+        _number(
+      item['stress'],
+    );
+
     final fatigue =
         _number(
       item['fatigue'],
@@ -349,6 +376,12 @@ class _CVSummaryScreenState
                   ),
                 ),
               ),
+
+              Text(
+                'S ${(stress * 100).round()}%',
+              ),
+
+              const SizedBox(width: 12),
 
               Text(
                 'F ${(fatigue * 100).round()}%',

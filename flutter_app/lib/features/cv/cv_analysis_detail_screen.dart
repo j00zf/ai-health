@@ -130,6 +130,10 @@ class _CVAnalysisDetailScreenState
         data['derivedSignals']
             as Map<String, dynamic>?;
 
+    final stress =
+        data['stressAnalysis']
+            as Map<String, dynamic>?;
+
     final skin =
         data['skinAppearance']
             as Map<String, dynamic>?;
@@ -143,6 +147,28 @@ class _CVAnalysisDetailScreenState
           const EdgeInsets.all(16),
 
       children: [
+        _section(
+          title: 'Facial Stress Model',
+          icon: Icons.psychology_alt_rounded,
+          children: [
+            _row(
+              stress?['labelMappingVerified'] == true ? 'Stress signal' : 'Class 1 signal',
+              _percent(stress?['stressScore'] ?? signals?['stressScore']),
+            ),
+            _row('Model confidence', _percent(stress?['confidence'] ?? signals?['stressConfidence'])),
+            _row('Predicted class', stress?['predictedClassName']?.toString() ?? 'Unavailable'),
+            _row('Signal level', stress?['stressLevel']?.toString() ?? 'Unavailable'),
+            _row('Class 0 probability', _percent(stress?['class0Probability'])),
+            _row('Class 1 probability', _percent(stress?['class1Probability'])),
+            _row(
+              'Label mapping',
+              stress?['labelMappingVerified'] == true ? 'Verified' : 'Not yet verified',
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+
         _section(
           title: 'Visual Signals',
           icon: Icons.insights_rounded,

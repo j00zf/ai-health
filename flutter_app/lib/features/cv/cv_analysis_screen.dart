@@ -238,7 +238,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'The captured frame is read by ML Kit on the device. This backend flow saves extracted CV measurements, not the raw face image. These signals are non-clinical and are not a diagnosis.',
+              'The guided scan uses ML Kit on-device. One straight-facing JPEG is temporarily sent to the backend and Python model for inference, then discarded. The raw face image is not stored. These signals are experimental and are not a diagnosis.',
               style: TextStyle(fontSize: 12, height: 1.5),
             ),
           ),
@@ -255,6 +255,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
     final pose = _map(result['headPose']);
     final skin = _map(result['skinAppearance']);
     final derived = _map(result['derivedSignals']);
+    final stress = _map(result['stressAnalysis']);
     final capture = _map(result['captureMetadata']);
 
     final saved = result['_id'] != null || capture['captured'] == true;
@@ -271,6 +272,43 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
             saved: saved,
             faceDetected: faceDetected,
             capturedAt: result['capturedAt']?.toString() ?? '',
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _resultCard(
+                  stress['labelMappingVerified'] == true
+                      ? 'Stress signal'
+                      : 'Class 1 signal',
+                  _percent(stress['stressScore'] ?? derived['stressScore']),
+                  Icons.psychology_alt_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _resultCard(
+                  'Model confidence',
+                  _percent(stress['confidence'] ?? derived['stressConfidence']),
+                  Icons.verified_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _section(
+            'Facial Model',
+            Icons.memory_rounded,
+            [
+              _dataRow('Predicted class', stress['predictedClassName']?.toString() ?? 'Unavailable'),
+              _dataRow('Signal level', stress['stressLevel']?.toString() ?? 'Unavailable'),
+              _dataRow('Class 0 probability', _percent(stress['class0Probability'])),
+              _dataRow('Class 1 probability', _percent(stress['class1Probability'])),
+              _dataRow(
+                'Label mapping',
+                stress['labelMappingVerified'] == true ? 'Verified' : 'Not yet verified',
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Row(
@@ -376,7 +414,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
               borderRadius: BorderRadius.circular(18),
             ),
             child: const Text(
-              'These are computer-vision indicators. Visual fatigue and alertness are heuristic signals and should not be treated as medical measurements or diagnoses.',
+              'These are experimental computer-vision indicators. Facial-model class probabilities, visual fatigue and alertness are supporting signals only and must not be treated as medical or psychological diagnoses.',
               style: TextStyle(fontSize: 12, height: 1.5, color: Colors.black54),
             ),
           ),

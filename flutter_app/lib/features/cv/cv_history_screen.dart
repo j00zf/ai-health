@@ -144,6 +144,14 @@ class _CVHistoryScreenState
         item['derivedSignals']
             as Map<String, dynamic>?;
 
+    final stress =
+        item['stressAnalysis']
+            as Map<String, dynamic>?;
+
+    final stressScore = _number(
+      stress?['stressScore'] ?? signals?['stressScore'],
+    );
+
     final fatigue =
         _number(
       signals?[
@@ -215,6 +223,7 @@ class _CVHistoryScreenState
           ),
 
           child: Text(
+            '${stress?['labelMappingVerified'] == true ? 'Stress' : 'Class 1'} ${(stressScore * 100).round()}%  •  '
             'Fatigue ${(fatigue * 100).round()}%  •  '
             'Alertness ${(alertness * 100).round()}%',
           ),

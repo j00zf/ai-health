@@ -76,6 +76,10 @@ class _CVCameraScreenState extends State<CVCameraScreen>
 
   final List<Map<String, dynamic>> _captureResults = [];
 
+  // The first straight-facing JPEG is temporarily uploaded to the Node backend,
+  // proxied to the Python facial-stress service, and then discarded.
+  String? _stressImagePath;
+
   // Number of blink-like captured samples detected during the scan.
   // Kept as a temporal scan metric rather than an ML Kit confidence value.
   int _blinkCount = 0;
@@ -299,6 +303,7 @@ class _CVCameraScreenState extends State<CVCameraScreen>
       _scanCompleted = false;
       _currentStep = 0;
       _captureResults.clear();
+      _stressImagePath = null;
       _blinkCount = 0;
     });
 
@@ -336,6 +341,12 @@ class _CVCameraScreenState extends State<CVCameraScreen>
 
         final snapshot =
             await controller.takePicture();
+
+        // The straight-facing capture is the most suitable single image for
+        // the server-side CNN. The file is not persisted by our backend.
+        if (index == 0) {
+          _stressImagePath = snapshot.path;
+        }
 
         debugPrint(
           '[CV] Captured step ${index + 1}: '
@@ -414,9 +425,18 @@ class _CVCameraScreenState extends State<CVCameraScreen>
       // Save through existing authenticated API.
       // -----------------------------------------------------------------
 
+      final stressImagePath = _stressImagePath;
+
+      if (stressImagePath == null) {
+        throw Exception(
+          'The straight-facing image was not captured. Please try again.',
+        );
+      }
+
       final response =
-          await _cvService.analyze(
+          await _cvService.analyzeWithImage(
         features: payload,
+        imagePath: stressImagePath,
       );
 
       final analysis =
@@ -792,10 +812,16 @@ class _CVCameraScreenState extends State<CVCameraScreen>
           'camera',
 
       'modelName':
-          'google-mlkit-face-detection',
+          'google-mlkit-face-detection+facial-stress-cnn',
 
       'modelVersion':
-          '1.0.0',
+          '1.1.0',
+
+      'capture': {
+        'captured': true,
+        'captureMethod': 'camera_snapshot',
+        'capturedAt': DateTime.now().toUtc().toIso8601String(),
+      },
 
       // -----------------------------------------------------------------
       // Image quality
@@ -1013,6 +1039,10 @@ class _CVCameraScreenState extends State<CVCameraScreen>
       'privacy': {
         'rawImageStored':
             false,
+
+        // One JPEG is transmitted temporarily for inference and discarded.
+        'rawImageTemporarilyProcessed':
+            true,
 
         'consentGiven':
             true,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -6,194 +7,166 @@ import '../constants/api_constants.dart';
 import 'auth_manager.dart';
 
 class CVService {
-  final AuthManager _authManager =
-      AuthManager();
+  final AuthManager _authManager = AuthManager();
 
   Future<String?> _token() async {
     return await _authManager.getToken();
   }
 
-  Future<Map<String, String>>
-      _headers() async {
+  Future<Map<String, String>> _jsonHeaders() async {
     final token = await _token();
 
     return {
-      'Authorization':
-          'Bearer $token',
-      'Content-Type':
-          'application/json',
-      'Accept':
-          'application/json',
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
   }
 
-  // ===========================================================================
-  // ANALYZE
-  // ===========================================================================
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await _token();
 
-  Future<Map<String, dynamic>>
-      analyze({
-    required Map<String, dynamic>
-        features,
+    return {
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+    };
+  }
+
+  // Existing JSON-only endpoint.
+  Future<Map<String, dynamic>> analyze({
+    required Map<String, dynamic> features,
   }) async {
-    final response =
-        await http.post(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/analyze',
-      ),
-      headers:
-          await _headers(),
+    final response = await http.post(
+      Uri.parse('${ApiConstants.baseUrl}/cv/analyze'),
+      headers: await _jsonHeaders(),
       body: jsonEncode(features),
     );
 
     return _decode(response);
   }
 
-  // Convenience method used by the camera capture flow.
-  // It sends only extracted CV data; the raw camera image is not uploaded.
-  Future<Map<String, dynamic>> saveCapture({
+  // New multipart endpoint.
+  // Sends the exact camera JPEG used for server-side stress inference,
+  // together with the locally extracted ML Kit feature payload.
+  Future<Map<String, dynamic>> analyzeWithImage({
     required Map<String, dynamic> features,
+    required String imagePath,
   }) async {
-    return analyze(features: features);
+    final file = File(imagePath);
+
+    if (!await file.exists()) {
+      throw Exception('Captured image file was not found.');
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${ApiConstants.baseUrl}/cv/analyze-image'),
+    );
+
+    request.headers.addAll(await _authHeaders());
+    request.fields['features'] = jsonEncode(features);
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        imagePath,
+      ),
+    );
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    return _decode(response);
   }
 
-  // ===========================================================================
-  // LATEST
-  // ===========================================================================
-
-  Future<Map<String, dynamic>>
-      getLatest() async {
-    final response =
-        await http.get(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/latest',
-      ),
-      headers:
-          await _headers(),
+  Future<Map<String, dynamic>> getLatest() async {
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/cv/latest'),
+      headers: await _jsonHeaders(),
     );
 
     return _decode(response);
   }
 
-  // ===========================================================================
-  // HISTORY
-  // ===========================================================================
+  // This is the payload you can feed into the AI chatbot as supporting context.
+  Future<Map<String, dynamic>> getLatestChatContext() async {
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/cv/latest/chat-context'),
+      headers: await _jsonHeaders(),
+    );
 
-  Future<Map<String, dynamic>>
-      getHistory({
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> getHistory({
     int limit = 30,
   }) async {
-    final response =
-        await http.get(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/history?limit=$limit',
-      ),
-      headers:
-          await _headers(),
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/cv/history?limit=$limit'),
+      headers: await _jsonHeaders(),
     );
 
     return _decode(response);
   }
 
-  // ===========================================================================
-  // SUMMARY
-  // ===========================================================================
-
-  Future<Map<String, dynamic>>
-      getSummary() async {
-    final response =
-        await http.get(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/summary',
-      ),
-      headers:
-          await _headers(),
+  Future<Map<String, dynamic>> getSummary() async {
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/cv/summary'),
+      headers: await _jsonHeaders(),
     );
 
     return _decode(response);
   }
 
-  // ===========================================================================
-  // TRENDS
-  // ===========================================================================
-
-  Future<Map<String, dynamic>>
-      getTrends({
+  Future<Map<String, dynamic>> getTrends({
     int limit = 30,
   }) async {
-    final response =
-        await http.get(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/trends?limit=$limit',
-      ),
-      headers:
-          await _headers(),
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/cv/trends?limit=$limit'),
+      headers: await _jsonHeaders(),
     );
 
     return _decode(response);
   }
 
-  // ===========================================================================
-  // SINGLE ANALYSIS
-  // ===========================================================================
-
-  Future<Map<String, dynamic>>
-      getById(
-    String id,
-  ) async {
-    final response =
-        await http.get(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/$id',
-      ),
-      headers:
-          await _headers(),
+  Future<Map<String, dynamic>> getById(String id) async {
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/cv/$id'),
+      headers: await _jsonHeaders(),
     );
 
     return _decode(response);
   }
 
-  // ===========================================================================
-  // DELETE
-  // ===========================================================================
-
-  Future<Map<String, dynamic>>
-      delete(
-    String id,
-  ) async {
-    final response =
-        await http.delete(
-      Uri.parse(
-        '${ApiConstants.baseUrl}/cv/$id',
-      ),
-      headers:
-          await _headers(),
+  Future<Map<String, dynamic>> delete(String id) async {
+    final response = await http.delete(
+      Uri.parse('${ApiConstants.baseUrl}/cv/$id'),
+      headers: await _jsonHeaders(),
     );
 
     return _decode(response);
   }
 
-  // ===========================================================================
-  // RESPONSE
-  // ===========================================================================
+  Map<String, dynamic> _decode(http.Response response) {
+    dynamic decoded;
 
-  Map<String, dynamic>
-      _decode(
-    http.Response response,
-  ) {
-    final data =
-        jsonDecode(response.body);
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      throw Exception(
+        'CV request failed (${response.statusCode}): ${response.body}',
+      );
+    }
 
-    if (response.statusCode >=
-        200 &&
-        response.statusCode < 300) {
-      return Map<String, dynamic>
-          .from(data);
+    final data = decoded is Map
+        ? Map<String, dynamic>.from(decoded)
+        : <String, dynamic>{'data': decoded};
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return data;
     }
 
     throw Exception(
-      data['message'] ??
-          'CV request failed',
+      data['message'] ?? data['detail'] ?? 'CV request failed',
     );
   }
 }
