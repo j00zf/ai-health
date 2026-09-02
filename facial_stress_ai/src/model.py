@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+import torchvision.models as models
 
 
 # ==========================================
-# FACIAL STRESS CNN (VGG-STYLE)
+# FACIAL STRESS CNN (MOBILENET_V2 TRANSFER LEARNING)
 # ==========================================
 
 class FacialStressModel(nn.Module):
@@ -14,108 +15,36 @@ class FacialStressModel(nn.Module):
 
 
         # ==================================
-        # FEATURE EXTRACTION
+        # LOAD PRE-TRAINED BACKBONE
         # ==================================
 
-        self.features = nn.Sequential(
-
-            # ------------------------------
-            # BLOCK 1
-            # ------------------------------
-
-            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-
-            nn.MaxPool2d(kernel_size=2),
-            nn.Dropout2d(0.2),
-
-
-            # ------------------------------
-            # BLOCK 2
-            # ------------------------------
-
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-
-            nn.MaxPool2d(kernel_size=2),
-            nn.Dropout2d(0.3),
-
-
-            # ------------------------------
-            # BLOCK 3
-            # ------------------------------
-
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-
-            nn.MaxPool2d(kernel_size=2),
-            nn.Dropout2d(0.4)
-
+        self.backbone = models.mobilenet_v2(
+            weights=models.MobileNet_V2_Weights.DEFAULT
         )
 
 
         # ==================================
-        # GLOBAL POOLING
+        # FREEZE FEATURES
         # ==================================
 
-        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # We freeze the feature extraction layers so they retain
+        # their ImageNet knowledge and don't overfit to our tiny dataset.
+        for param in self.backbone.features.parameters():
+            param.requires_grad = False
 
 
         # ==================================
-        # CLASSIFIER
+        # REPLACE CLASSIFIER
         # ==================================
 
-        self.classifier = nn.Sequential(
+        # The original classifier outputs 1000 classes.
+        # We replace it with our own head that outputs 2 classes.
+        in_features = self.backbone.classifier[1].in_features
 
-            nn.Flatten(),
-
-            nn.Dropout(0.5),
-
-            nn.Linear(128, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(inplace=True),
-
-            nn.Dropout(0.4),
-
-            nn.Linear(128, num_classes)
-
+        self.backbone.classifier = nn.Sequential(
+            nn.Dropout(p=0.5),
+            nn.Linear(in_features, num_classes)
         )
-
-        # Initialize weights for proper convergence
-        self._initialize_weights()
-
-
-    # ======================================
-    # WEIGHT INITIALIZATION
-    # ======================================
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                nn.init.constant_(m.bias, 0)
 
 
     # ======================================
@@ -124,8 +53,5 @@ class FacialStressModel(nn.Module):
 
     def forward(self, x):
 
-        x = self.features(x)
-        x = self.global_pool(x)
-        x = self.classifier(x)
-
-        return x
+        # MobileNetV2 backbone handles features, pooling, and classification
+        return self.backbone(x)
