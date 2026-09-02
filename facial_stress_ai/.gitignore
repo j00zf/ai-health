@@ -59,8 +59,7 @@ data/processed/
 # =========================================
 # Trained models and checkpoints
 # =========================================
-models/*.pth
-models/*.pt
+
 models/*.onnx
 checkpoints/
 *.ckpt
