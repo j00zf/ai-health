@@ -223,7 +223,7 @@ class _CVHistoryScreenState
           ),
 
           child: Text(
-            '${stress?['labelMappingVerified'] == true ? 'Stress' : 'Class 1'} ${(stressScore * 100).round()}%  •  '
+            'Stress ${(stressScore * 100).round()}%  •  '
             'Fatigue ${(fatigue * 100).round()}%  •  '
             'Alertness ${(alertness * 100).round()}%',
           ),

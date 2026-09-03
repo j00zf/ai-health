@@ -278,9 +278,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
             children: [
               Expanded(
                 child: _resultCard(
-                  stress['labelMappingVerified'] == true
-                      ? 'Stress signal'
-                      : 'Class 1 signal',
+                  'Stress signal',
                   _percent(stress['stressScore'] ?? derived['stressScore']),
                   Icons.psychology_alt_rounded,
                 ),
@@ -300,10 +298,10 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
             'Facial Model',
             Icons.memory_rounded,
             [
-              _dataRow('Predicted class', stress['predictedClassName']?.toString() ?? 'Unavailable'),
+              _dataRow('Predicted class', (stress['predictedClassName']?.toString() ?? 'Unavailable').replaceAll(RegExp(r'(Class )?0'), 'Non-stress').replaceAll(RegExp(r'(Class )?1'), 'Stress')),
               _dataRow('Signal level', stress['stressLevel']?.toString() ?? 'Unavailable'),
-              _dataRow('Class 0 probability', _percent(stress['class0Probability'])),
-              _dataRow('Class 1 probability', _percent(stress['class1Probability'])),
+              _dataRow('Non-stress probability', _percent(stress['class0Probability'])),
+              _dataRow('Stress probability', _percent(stress['class1Probability'])),
               _dataRow(
                 'Label mapping',
                 stress['labelMappingVerified'] == true ? 'Verified' : 'Not yet verified',

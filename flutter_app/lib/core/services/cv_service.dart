@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../constants/api_constants.dart';
 import 'auth_manager.dart';
@@ -69,6 +70,7 @@ class CVService {
       await http.MultipartFile.fromPath(
         'file',
         imagePath,
+        contentType: MediaType('image', 'jpeg'),
       ),
     );
 

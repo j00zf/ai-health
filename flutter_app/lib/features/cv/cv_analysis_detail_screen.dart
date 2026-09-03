@@ -152,14 +152,14 @@ class _CVAnalysisDetailScreenState
           icon: Icons.psychology_alt_rounded,
           children: [
             _row(
-              stress?['labelMappingVerified'] == true ? 'Stress signal' : 'Class 1 signal',
+              'Stress signal',
               _percent(stress?['stressScore'] ?? signals?['stressScore']),
             ),
             _row('Model confidence', _percent(stress?['confidence'] ?? signals?['stressConfidence'])),
-            _row('Predicted class', stress?['predictedClassName']?.toString() ?? 'Unavailable'),
+            _row('Predicted class', (stress?['predictedClassName']?.toString() ?? 'Unavailable').replaceAll(RegExp(r'(Class )?0'), 'Non-stress').replaceAll(RegExp(r'(Class )?1'), 'Stress')),
             _row('Signal level', stress?['stressLevel']?.toString() ?? 'Unavailable'),
-            _row('Class 0 probability', _percent(stress?['class0Probability'])),
-            _row('Class 1 probability', _percent(stress?['class1Probability'])),
+            _row('Non-stress probability', _percent(stress?['class0Probability'])),
+            _row('Stress probability', _percent(stress?['class1Probability'])),
             _row(
               'Label mapping',
               stress?['labelMappingVerified'] == true ? 'Verified' : 'Not yet verified',
