@@ -45,6 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition is used to process voice commands for the AI assistant.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The microphone is used to record voice commands for the AI assistant.</string>
 	 <key>CFBundleURLSchemes</key>
         <array>
             <string>pulseai</string>

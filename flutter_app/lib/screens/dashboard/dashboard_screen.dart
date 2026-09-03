@@ -17,8 +17,9 @@ import '../auth/welcome_screen.dart';
 import '../../features/cv/cv_analysis_screen.dart';
 import '../../features/ml/ml_health_dashboard_screen.dart';
 import '../../features/ml/ml_health_history_screen.dart';
-import '../../features/ml/ml_health_details_screen.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/services/ml_health_service.dart';
+import '../../core/services/voice_assistant_service.dart';
 
 /// Unified application dashboard.
 ///
@@ -46,6 +47,27 @@ class _DashboardScreenState
   // ===========================================================================
   // DASHBOARD STATE
   // ===========================================================================
+
+  final VoiceAssistantService _voiceAssistant = VoiceAssistantService();
+  VoiceState _voiceState = VoiceState.idle;
+  String? _voiceMessage;
+
+  void _triggerVoiceAssistant() {
+    _voiceAssistant.startVoiceAssistant(
+      onStateChanged: (state, message) {
+        if (!mounted) return;
+        setState(() {
+          _voiceState = state;
+          _voiceMessage = message;
+        });
+        if (state == VoiceState.error && message != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+          );
+        }
+      },
+    );
+  }
 
   bool isLoading = true;
   bool isHealthLoading = false;
@@ -1102,9 +1124,13 @@ debugPrint(
             devices["healthConnected"] ==
                 true;
 
-    return Scaffold(
-      backgroundColor:
-          const Color(0xfff4f7f6),
+    return GestureDetector(
+      onDoubleTap: _triggerVoiceAssistant,
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor:
+                const Color(0xfff4f7f6),
 
       drawer: HealthSidebar(
   user: user,
@@ -1360,6 +1386,62 @@ debugPrint(
             ],
           ),
         ),
+      ),
+          ),
+          if (_voiceState != VoiceState.idle && _voiceState != VoiceState.error)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_voiceState == VoiceState.listening) ...[
+                        const SpinKitWave(color: Colors.white, size: 50.0),
+                        const SizedBox(height: 24),
+                        const Text('Listening...', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                        if (_voiceMessage != null && _voiceMessage!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Text(
+                              _voiceMessage!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70, fontSize: 18, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                      ] else if (_voiceState == VoiceState.processing) ...[
+                        const CircularProgressIndicator(color: Colors.white),
+                        const SizedBox(height: 16),
+                        const Text('Processing...', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      ] else if (_voiceState == VoiceState.speaking) ...[
+                        const Icon(Icons.volume_up, color: Colors.white, size: 64),
+                        const SizedBox(height: 16),
+                        const Text('Speaking...', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                        if (_voiceMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Text(
+                              _voiceMessage!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70, fontSize: 18),
+                            ),
+                          ),
+                      ],
+                      const SizedBox(height: 32),
+                      ElevatedButton(
+                        onPressed: () {
+                          _voiceAssistant.stop();
+                          setState(() => _voiceState = VoiceState.idle);
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
