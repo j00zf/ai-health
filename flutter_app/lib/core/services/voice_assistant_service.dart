@@ -18,6 +18,8 @@ class VoiceAssistantService {
   final FlutterTts _flutterTts = FlutterTts();
   
   bool _isInitialized = false;
+  VoiceState _currentState = VoiceState.idle;
+  Function(VoiceState state, String? message)? _onStateChanged;
   
   VoiceAssistantService() {
     _initTts();
@@ -30,11 +32,30 @@ class VoiceAssistantService {
     await _flutterTts.setPitch(1.0);
   }
 
+  void _updateState(VoiceState state, String? message) {
+    _currentState = state;
+    _onStateChanged?.call(state, message);
+  }
+
   Future<bool> initialize() async {
     if (_isInitialized) return true;
     _isInitialized = await _speechToText.initialize(
-      onError: (error) => print('STT Error: $error'),
-      onStatus: (status) => print('STT Status: $status'),
+      onError: (error) {
+        print('STT Error: $error');
+        // If there is an error during listening (e.g., timeout/no match), go to idle.
+        if (_currentState == VoiceState.listening) {
+          _updateState(VoiceState.idle, null);
+        }
+      },
+      onStatus: (status) {
+        print('STT Status: $status');
+        if (status == 'done' || status == 'notListening') {
+          // If STT stopped but we didn't progress to processing, close the screen.
+          if (_currentState == VoiceState.listening) {
+            _updateState(VoiceState.idle, null);
+          }
+        }
+      },
     );
     return _isInitialized;
   }
@@ -43,22 +64,24 @@ class VoiceAssistantService {
   Future<void> startVoiceAssistant({
     required Function(VoiceState state, String? message) onStateChanged,
   }) async {
+    _onStateChanged = onStateChanged;
+    
     final bool available = await initialize();
     if (!available) {
-      onStateChanged(VoiceState.error, 'Speech recognition not available.');
+      _updateState(VoiceState.error, 'Speech recognition not available.');
       return;
     }
 
     if (_speechToText.isListening) {
       await _speechToText.stop();
-      onStateChanged(VoiceState.idle, null);
+      _updateState(VoiceState.idle, null);
       return;
     }
     
     // Stop any ongoing speech
     await _flutterTts.stop();
 
-    onStateChanged(VoiceState.listening, 'Listening...');
+    _updateState(VoiceState.listening, 'Listening...');
 
     String recognizedText = '';
 
@@ -67,13 +90,13 @@ class VoiceAssistantService {
         recognizedText = result.recognizedWords;
         
         if (!result.finalResult) {
-          onStateChanged(VoiceState.listening, recognizedText);
+          _updateState(VoiceState.listening, recognizedText);
         }
 
         // When the user stops speaking
         if (result.finalResult) {
-          onStateChanged(VoiceState.processing, 'Processing...');
-          await _processAndSpeak(recognizedText, onStateChanged);
+          _updateState(VoiceState.processing, 'Processing...');
+          await _processAndSpeak(recognizedText);
         }
       },
       listenFor: const Duration(seconds: 30),
@@ -87,14 +110,12 @@ class VoiceAssistantService {
   Future<void> stop() async {
     await _speechToText.stop();
     await _flutterTts.stop();
+    _updateState(VoiceState.idle, null);
   }
 
-  Future<void> _processAndSpeak(
-    String userText, 
-    Function(VoiceState state, String? message) onStateChanged,
-  ) async {
+  Future<void> _processAndSpeak(String userText) async {
     if (userText.isEmpty) {
-      onStateChanged(VoiceState.idle, null);
+      _updateState(VoiceState.idle, null);
       return;
     }
 
@@ -117,25 +138,33 @@ class VoiceAssistantService {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
-        final aiMessage = decoded['message']?.toString() ?? 'I could not process that request.';
         
-        onStateChanged(VoiceState.speaking, aiMessage);
+        final aiMessageObj = decoded['message'];
+        String aiMessage = 'I could not process that request.';
+        if (aiMessageObj is Map && aiMessageObj['content'] != null) {
+          aiMessage = aiMessageObj['content'].toString();
+        } else if (aiMessageObj != null) {
+          aiMessage = aiMessageObj.toString();
+        }
+        
+        _updateState(VoiceState.speaking, aiMessage);
         
         await _flutterTts.speak(aiMessage);
         
         _flutterTts.setCompletionHandler(() {
-          onStateChanged(VoiceState.idle, null);
+          // CONTINUOUS FLOW: Start listening again after speaking
+          startVoiceAssistant(onStateChanged: _onStateChanged!);
         });
       } else {
         throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
-      onStateChanged(VoiceState.error, 'Sorry, something went wrong.');
+      _updateState(VoiceState.error, 'Sorry, something went wrong.');
       print('VoiceAssistant Error: $e');
       await _flutterTts.speak("Sorry, something went wrong.");
       
       Future.delayed(const Duration(seconds: 3), () {
-        onStateChanged(VoiceState.idle, null);
+        _updateState(VoiceState.idle, null);
       });
     }
   }

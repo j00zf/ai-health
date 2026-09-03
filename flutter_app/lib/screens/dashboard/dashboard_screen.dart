@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -1391,53 +1392,108 @@ debugPrint(
           ),
           if (_voiceState != VoiceState.idle && _voiceState != VoiceState.error)
             Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_voiceState == VoiceState.listening) ...[
-                        const SpinKitWave(color: Colors.white, size: 50.0),
-                        const SizedBox(height: 24),
-                        const Text('Listening...', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                        if (_voiceMessage != null && _voiceMessage!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Text(
-                              _voiceMessage!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white70, fontSize: 18, fontStyle: FontStyle.italic),
-                            ),
-                          ),
-                      ] else if (_voiceState == VoiceState.processing) ...[
-                        const CircularProgressIndicator(color: Colors.white),
-                        const SizedBox(height: 16),
-                        const Text('Processing...', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                      ] else if (_voiceState == VoiceState.speaking) ...[
-                        const Icon(Icons.volume_up, color: Colors.white, size: 64),
-                        const SizedBox(height: 16),
-                        const Text('Speaking...', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                        if (_voiceMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Text(
-                              _voiceMessage!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white70, fontSize: 18),
-                            ),
-                          ),
-                      ],
-                      const SizedBox(height: 32),
-                      ElevatedButton(
-                        onPressed: () {
-                          _voiceAssistant.stop();
-                          setState(() => _voiceState = VoiceState.idle);
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+              child: Material(
+                type: MaterialType.transparency,
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: Container(
+                    color: Colors.black.withOpacity(0.4),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_voiceState == VoiceState.listening) ...[
+                              const SpinKitWave(color: Color(0xff9f6eff), size: 60.0),
+                              const SizedBox(height: 32),
+                              const Text('Listening...', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w600, letterSpacing: 1.5)),
+                              if (_voiceMessage != null && _voiceMessage!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 24.0),
+                                  child: Text(
+                                    '"${_voiceMessage!}"',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white70, fontSize: 20, fontStyle: FontStyle.italic, fontWeight: FontWeight.w300),
+                                  ),
+                                ),
+                            ] else if (_voiceState == VoiceState.processing) ...[
+                              const SpinKitPulse(color: Color(0xff9f6eff), size: 80.0),
+                              const SizedBox(height: 32),
+                              const Text('Processing...', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w600, letterSpacing: 1.5)),
+                            ] else if (_voiceState == VoiceState.speaking) ...[
+                              const SpinKitWave(color: Color(0xff9f6eff), size: 50.0, type: SpinKitWaveType.center),
+                              const SizedBox(height: 32),
+                              if (_voiceMessage != null)
+                                Text(
+                                  _voiceMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white, 
+                                    fontSize: 24, 
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                            ],
+                            const SizedBox(height: 48),
+                            if (_voiceState == VoiceState.speaking)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      _voiceAssistant.stop();
+                                      setState(() => _voiceState = VoiceState.idle);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white.withOpacity(0.15),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                    ),
+                                    icon: const Icon(Icons.check, size: 28),
+                                    label: const Text('Done', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      _voiceAssistant.stop();
+                                      _triggerVoiceAssistant();
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xff9f6eff),
+                                      foregroundColor: Colors.white,
+                                      elevation: 4,
+                                      shadowColor: const Color(0xff9f6eff).withOpacity(0.5),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                    ),
+                                    icon: const Icon(Icons.mic, size: 28),
+                                    label: const Text('Reply', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              )
+                            else
+                              ElevatedButton(
+                                onPressed: () {
+                                  _voiceAssistant.stop();
+                                  setState(() => _voiceState = VoiceState.idle);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white.withOpacity(0.15),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                                ),
+                                child: const Text('Cancel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              ),
+                          ],
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
