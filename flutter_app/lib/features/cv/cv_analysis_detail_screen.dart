@@ -219,22 +219,6 @@ class _CVAnalysisDetailScreenState
                     'faceConfidence'],
               ),
             ),
-
-            _row(
-              'Lighting',
-              _percent(
-                quality?[
-                    'lightingScore'],
-              ),
-            ),
-
-            _row(
-              'Blur score',
-              _percent(
-                quality?[
-                    'blurScore'],
-              ),
-            ),
           ],
         ),
 

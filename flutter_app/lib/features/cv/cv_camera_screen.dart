@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
@@ -602,8 +603,13 @@ class _CVCameraScreenState extends State<CVCameraScreen>
       final prolongedClosure =
           eyeOpen < 0.25;
 
-      final imageSize =
-          inputImage.metadata?.size;
+      Size? imageSize;
+      try {
+        final decoded = await decodeImageFromList(await File(path).readAsBytes());
+        imageSize = Size(decoded.width.toDouble(), decoded.height.toDouble());
+      } catch (e) {
+        debugPrint('Could not read image size: $e');
+      }
 
       final faceAreaRatio =
           _calculateFaceAreaRatio(
@@ -851,12 +857,6 @@ class _CVCameraScreenState extends State<CVCameraScreen>
 
         'faceSizeRatio':
             faceAreaRatio,
-
-        'lightingScore':
-            0.0,
-
-        'blurScore':
-            0.0,
       },
 
       // -----------------------------------------------------------------

@@ -22,6 +22,8 @@ import '../../features/ml/ml_health_details_screen.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/services/ml_health_service.dart';
 import '../../core/services/voice_assistant_service.dart';
+import '../../core/services/cv_service.dart';
+import '../../features/cv/cv_analysis_detail_screen.dart';
 
 /// Unified application dashboard.
 ///
@@ -83,6 +85,10 @@ class _DashboardScreenState
   bool _mlLoading = false;
   bool _mlAnalyzing = false;
   String? _mlError;
+
+  Map<String, dynamic>? _cvAnalysis;
+  bool _cvLoading = false;
+  String? _cvError;
 
   Map<String, dynamic>? latestHealthRecord;
 
@@ -148,15 +154,39 @@ class _DashboardScreenState
     } catch (e) {
       debugPrint('[Dashboard] ML health load error: $e');
 
-      if (!mounted) return;
-
-      setState(() {
-        _mlLoading = false;
-        _mlError = 'Unable to load ML health analysis.';
-      });
+      if (mounted) {
+        setState(() {
+          _mlLoading = false;
+          _mlError = 'Unable to load ML health analysis.';
+        });
+      }
     }
   }
 
+  Future<void> _loadCvAnalysis() async {
+    if (_cvLoading) return;
+    if (mounted) setState(() { _cvLoading = true; _cvError = null; });
+    try {
+      final cvService = CVService();
+      final result = await cvService.getLatest();
+      if (!mounted) return;
+      if (result['success'] == true && result['analysis'] != null) {
+        setState(() {
+          _cvAnalysis = Map<String, dynamic>.from(result['analysis']);
+          _cvLoading = false;
+        });
+      } else {
+        setState(() {
+          _cvAnalysis = null;
+          _cvLoading = false;
+          _cvError = result['message']?.toString();
+        });
+      }
+    } catch (e) {
+      debugPrint('[Dashboard] CV analysis load error: $e');
+      if (mounted) setState(() { _cvLoading = false; _cvError = 'No recent CV scan available.'; _cvAnalysis = null; });
+    }
+  }
 
   Map<String, dynamic> _currentMlProfile() {
     final rawProfile = dashboard?['profile'];
@@ -356,6 +386,7 @@ debugPrint(
     await Future.wait([
       loadDashboard(),
       _loadMlHealthAnalysis(),
+      _loadCvAnalysis(),
     ]);
 
     await _maybeAutomaticHealthSync();
@@ -1319,6 +1350,16 @@ debugPrint(
               ),
 
               // ===============================================================
+              // CV STRESS ANALYSIS
+              // ===============================================================
+
+              _buildCvStressSection(),
+
+              const SizedBox(
+                height: 28,
+              ),
+
+              // ===============================================================
               // GOOGLE HEALTH
               // ===============================================================
 
@@ -1737,6 +1778,193 @@ debugPrint(
         else
           _buildMlEmptyCard(),
       ],
+    );
+  }
+
+  bool _isCvStale() {
+    if (_cvAnalysis == null || _cvAnalysis!['capturedAt'] == null) return true;
+    final capturedAt = DateTime.tryParse(_cvAnalysis!['capturedAt'].toString());
+    if (capturedAt == null) return true;
+    return DateTime.now().difference(capturedAt).inHours >= 6;
+  }
+
+  Widget _buildCvStressSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.face_retouching_natural_rounded,
+                color: Colors.orange,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Facial Stress Analysis',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Real-time stress tracking via Computer Vision',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Refresh',
+              onPressed: _cvLoading ? null : () => _loadCvAnalysis(),
+              icon: const Icon(
+                Icons.refresh_rounded,
+                color: Colors.orange,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (_cvLoading)
+          _buildMlLoadingCard()
+        else if (_cvAnalysis != null)
+          _buildCvAnalysisCard()
+        else
+          _buildCvEmptyCard(),
+      ],
+    );
+  }
+
+  Widget _buildCvEmptyCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 40),
+          const SizedBox(height: 12),
+          const Text('No Stress Scan Found', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Take a quick 10-second facial scan to measure your current stress level.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CVAnalysisScreen())).then((_) => _loadCvAnalysis()),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            child: const Text('Take Stress Test'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCvAnalysisCard() {
+    final stressLevel = _cvAnalysis!['stressAnalysis']?['stressLevel']?.toString().toUpperCase() ?? 'UNKNOWN';
+    final stressScore = _toDouble(_cvAnalysis!['stressAnalysis']?['stressScore']);
+    final isStale = _isCvStale();
+    
+    Color levelColor = Colors.green;
+    if (stressLevel == 'MODERATE') levelColor = Colors.orange;
+    if (stressLevel == 'ELEVATED' || stressLevel == 'HIGH') levelColor = Colors.redAccent;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: isStale ? Border.all(color: Colors.orange.withOpacity(0.5), width: 2) : null,
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Latest Stress Score', style: TextStyle(color: Colors.black54, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        stressScore != null ? (stressScore * 100).toStringAsFixed(0) : '--',
+                        style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: levelColor),
+                      ),
+                      const SizedBox(width: 4),
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 6),
+                        child: Text('/ 100', style: TextStyle(fontSize: 16, color: Colors.black38)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(color: levelColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                child: Text(stressLevel, style: TextStyle(color: levelColor, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          if (isStale) ...[
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer_outlined, color: Colors.orange),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Your last scan was over 6 hours ago.', style: TextStyle(color: Colors.orange, fontSize: 13))),
+                  TextButton(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CVAnalysisScreen())).then((_) => _loadCvAnalysis()),
+                    style: TextButton.styleFrom(foregroundColor: Colors.orange, padding: EdgeInsets.zero, minimumSize: const Size(60, 30)),
+                    child: const Text('Scan Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 20),
+            Text(
+              stressLevel == 'LOW' 
+                ? 'Your stress levels are looking good! Keep up the relaxed state.' 
+                : stressLevel == 'MODERATE'
+                  ? 'You are showing moderate signs of stress. Consider taking a short break or a deep breath.'
+                  : 'High stress detected! Please take some time to relax, perhaps step away from the screen.',
+              style: const TextStyle(color: Colors.black87, fontSize: 14),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CVAnalysisDetailScreen(analysisId: _cvAnalysis!['_id']))).then((_) => _loadCvAnalysis()),
+              child: const Text('View Full Report'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
