@@ -41,7 +41,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const GROQ_MODEL =
   process.env.GROQ_MODEL ||
-  "llama-3.3-70b-versatile";
+  "llama-3.1-70b-versatile";
 
 if (!GROQ_API_KEY) {
   console.warn(
@@ -657,7 +657,7 @@ exports.sendMessage = async (
 
           temperature: 0.3,
 
-          max_completion_tokens:
+          max_tokens:
             1024,
         }
       );
