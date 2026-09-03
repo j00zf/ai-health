@@ -17,6 +17,7 @@ import '../auth/welcome_screen.dart';
 import '../../features/cv/cv_analysis_screen.dart';
 import '../../features/ml/ml_health_dashboard_screen.dart';
 import '../../features/ml/ml_health_history_screen.dart';
+import '../../features/ml/ml_health_details_screen.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../core/services/ml_health_service.dart';
 import '../../core/services/voice_assistant_service.dart';
