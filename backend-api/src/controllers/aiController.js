@@ -41,7 +41,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const GROQ_MODEL =
   process.env.GROQ_MODEL ||
-  "llama-3.1-70b-versatile";
+  "openai/gpt-oss-20b";
 
 if (!GROQ_API_KEY) {
   console.warn(
@@ -200,20 +200,20 @@ USER PROFILE
 ======================================================================
 
 ${JSON.stringify(
-  profile || {},
-  null,
-  2
-)}
+    profile || {},
+    null,
+    2
+  )}
 
 ======================================================================
 LATEST HEALTH DATA
 ======================================================================
 
 ${JSON.stringify(
-  healthData || {},
-  null,
-  2
-)}
+    healthData || {},
+    null,
+    2
+  )}
 
 ======================================================================
 RESPONSE STYLE
@@ -310,11 +310,11 @@ exports.getConversations = async (
 
           preview:
             conversation.messages
-                ?.length > 0
+              ?.length > 0
               ? conversation.messages[
-                  conversation.messages
-                    .length - 1
-                ].content
+                conversation.messages
+                  .length - 1
+              ].content
               : "",
         })
       );
@@ -632,10 +632,9 @@ exports.sendMessage = async (
     );
 
     console.log(
-      `[AI] Health record: ${
-        latestRecord
-          ? "available"
-          : "not available"
+      `[AI] Health record: ${latestRecord
+        ? "available"
+        : "not available"
       }`
     );
 
@@ -675,7 +674,7 @@ exports.sendMessage = async (
     if (
       !assistantReply ||
       typeof assistantReply !==
-        "string" ||
+      "string" ||
       !assistantReply.trim()
     ) {
       console.error(
@@ -774,7 +773,7 @@ exports.sendMessage = async (
     if (
       error?.status === 401 ||
       error?.code ===
-        "invalid_api_key"
+      "invalid_api_key"
     ) {
       return res.status(503).json({
         success: false,
@@ -805,9 +804,9 @@ exports.sendMessage = async (
 
     if (
       error?.code ===
-        "ETIMEDOUT" ||
+      "ETIMEDOUT" ||
       error?.code ===
-        "ECONNABORTED"
+      "ECONNABORTED"
     ) {
       return res.status(504).json({
         success: false,
