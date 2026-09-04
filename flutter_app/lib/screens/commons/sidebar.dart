@@ -167,12 +167,12 @@ class HealthSidebar extends StatelessWidget {
 // ML HEALTH
 // =====================================================
 
-_buildSectionLabel("ML HEALTH"),
+_buildSectionLabel("WELLNESS & STRESS"),
 
 _sidebarItem(
   icon: Icons.auto_graph_rounded,
-  title: "ML Health Analysis",
-  subtitle: "Current AI-powered health analysis",
+  title: "Wellness Insights",
+  subtitle: "Current AI-powered wellness analysis",
   color: const Color(0xff6c5ce7),
   onTap: () {
     Navigator.pop(context);
@@ -182,8 +182,8 @@ _sidebarItem(
 
 _sidebarItem(
   icon: Icons.health_and_safety_rounded,
-  title: "ML Health Details",
-  subtitle: "Detailed scores and AI insights",
+  title: "Wellness Details",
+  subtitle: "Detailed wellness scores and insights",
   color: const Color(0xff6c5ce7),
   onTap: () {
     Navigator.pop(context);
@@ -509,7 +509,7 @@ _sidebarItem(
           const Spacer(),
 
           Text(
-            "ML Health",
+            "Wellness & Stress",
             style: TextStyle(
               color: Colors.grey.shade400,
               fontSize: 10,

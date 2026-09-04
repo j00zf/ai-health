@@ -742,15 +742,32 @@ class HealthService {
       };
     }
 
-    int daysBack;
+    int daysBack = 3;
     if (!hasFull) {
       daysBack = 3650;
-    } else if (monthlyDue) {
-      daysBack = 90;
-    } else if (weeklyDue) {
-      daysBack = 14;
     } else {
-      daysBack = 3;
+      DateTime? latestDate;
+
+      // 1. First try to find the newest local record date
+      if (localRecords.isNotEmpty) {
+        final latestRecordDateStr = localRecords.first['date']?.toString();
+        if (latestRecordDateStr != null && latestRecordDateStr.isNotEmpty) {
+          latestDate = DateTime.tryParse(latestRecordDateStr);
+        }
+      }
+
+      // 2. Fallback to the last sync point if local records are missing a date
+      if (latestDate == null && serverPoints['lastSyncAt'] != null) {
+        latestDate = DateTime.tryParse(serverPoints['lastSyncAt'].toString());
+      }
+
+      // 3. Calculate dynamic days back
+      if (latestDate != null) {
+        final difference = DateTime.now().toUtc().difference(latestDate.toUtc());
+        daysBack = difference.inDays + 3; // Enforce minimum 3 days overlap
+      }
+
+      if (daysBack < 3) daysBack = 3;
     }
 
     final google = await getAllHealthHistory(daysBack: daysBack);

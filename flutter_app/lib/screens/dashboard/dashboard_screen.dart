@@ -1336,6 +1336,12 @@ debugPrint(
               ),
 
               const SizedBox(
+                height: 24,
+              ),
+
+              _buildCombinedScoresSection(),
+
+              const SizedBox(
                 height: 28,
               ),
 
@@ -1652,53 +1658,81 @@ debugPrint(
     Map<String, dynamic> profile,
   ) {
     return Container(
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.white,
-
-        borderRadius:
-            BorderRadius.circular(
-          18,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          iconColor: const Color(0xff6c5ce7),
+          collapsedIconColor: Colors.black45,
+          title: const Text(
+            'My Profile Details',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+            ),
+          ),
+          children: [
+            _buildInfoTile("Nickname", profile["nickname"]?.toString() ?? "-"),
+            _buildInfoTile("Age", profile["age"]?.toString() ?? "-"),
+            _buildInfoTile("BMI", profile["bmi"]?.toString() ?? "-"),
+            _buildInfoTile("Health Goal", profile["healthGoal"]?.toString() ?? "-"),
+            _buildInfoTile("Activity Level", profile["activityLevel"]?.toString() ?? "-"),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
+    );
+  }
 
+  Widget _buildCombinedScoresSection() {
+    final rawScores = _mlAnalysis?['scores'];
+    final mlScores = rawScores is Map ? Map<String, dynamic>.from(rawScores) : <String, dynamic>{};
+    final wellnessScoreRaw = _toDouble(mlScores['overallWellbeingScore']);
+    final wellnessScoreStr = _mlAnalysis != null ? (wellnessScoreRaw * 100).toStringAsFixed(0) : '--';
+
+    final stressScoreRaw = _cvAnalysis?['stressAnalysis']?['stressScore'];
+    final stressScoreStr = _cvAnalysis != null && stressScoreRaw != null ? (_toDouble(stressScoreRaw) * 100).toStringAsFixed(0) : '--';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInfoTile(
-            "Nickname",
-            profile["nickname"]
-                    ?.toString() ??
-                "-",
+          const Text(
+            'Your Snapshot',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
-
-          _buildInfoTile(
-            "Age",
-            profile["age"]
-                    ?.toString() ??
-                "-",
-          ),
-
-          _buildInfoTile(
-            "BMI",
-            profile["bmi"]
-                    ?.toString() ??
-                "-",
-          ),
-
-          _buildInfoTile(
-            "Health Goal",
-            profile["healthGoal"]
-                    ?.toString() ??
-                "-",
-          ),
-
-          _buildInfoTile(
-            "Activity Level",
-            profile[
-                        "activityLevel"]
-                    ?.toString() ??
-                "-",
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricTile(Icons.health_and_safety_rounded, 'Wellness Score', wellnessScoreStr),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildMetricTile(Icons.face_retouching_natural_rounded, 'Stress Score', stressScoreStr),
+              ),
+            ],
           ),
         ],
       ),
@@ -1881,9 +1915,16 @@ debugPrint(
     final stressScore = _toDouble(_cvAnalysis!['stressAnalysis']?['stressScore']);
     final isStale = _isCvStale();
     
-    Color levelColor = Colors.green;
+    Color levelColor = Colors.grey;
+    if (stressLevel == 'LOW') levelColor = Colors.green;
     if (stressLevel == 'MODERATE') levelColor = Colors.orange;
     if (stressLevel == 'ELEVATED' || stressLevel == 'HIGH') levelColor = Colors.redAccent;
+
+    final healthContext = _cvAnalysis!['healthContext'] ?? {};
+    final restingBpm = healthContext['restingHeartRate']?.toString() ?? '--';
+    final spO2 = healthContext['bloodOxygen'] != null 
+        ? '${_toDouble(healthContext['bloodOxygen']).toStringAsFixed(1)}%' 
+        : '--';
 
     return Container(
       width: double.infinity,
@@ -1919,10 +1960,23 @@ debugPrint(
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(color: levelColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                child: Text(stressLevel, style: TextStyle(color: levelColor, fontWeight: FontWeight.bold)),
+              if (stressLevel != 'UNVERIFIED' && stressLevel != 'UNKNOWN')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(color: levelColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                  child: Text(stressLevel, style: TextStyle(color: levelColor, fontWeight: FontWeight.bold)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricTile(Icons.favorite_rounded, 'Resting BPM', restingBpm),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildMetricTile(Icons.water_drop_rounded, 'SpO2', spO2),
               ),
             ],
           ),
@@ -1951,7 +2005,9 @@ debugPrint(
                 ? 'Your stress levels are looking good! Keep up the relaxed state.' 
                 : stressLevel == 'MODERATE'
                   ? 'You are showing moderate signs of stress. Consider taking a short break or a deep breath.'
-                  : 'High stress detected! Please take some time to relax, perhaps step away from the screen.',
+                  : (stressLevel == 'ELEVATED' || stressLevel == 'HIGH')
+                    ? 'High stress detected! Please take some time to relax, perhaps step away from the screen.'
+                    : 'Stress level is currently unverified or unknown.',
               style: const TextStyle(color: Colors.black87, fontSize: 14),
             ),
           ],
@@ -4137,6 +4193,31 @@ debugPrint(
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // METRIC TILE
+  // ===========================================================================
+
+  Widget _buildMetricTile(IconData icon, String title, String value) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.grey, size: 20),
+          const SizedBox(height: 8),
+          Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+        ],
       ),
     );
   }
