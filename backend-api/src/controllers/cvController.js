@@ -117,7 +117,7 @@ function buildChatbotContext(record) {
   const health = record?.healthContext || {};
 
   return {
-    source: "computer_vision",
+    source: "facial_stress",
     capturedAt: record?.capturedAt || null,
     facialAnalysis: {
       available: stress.available === true,
@@ -226,15 +226,15 @@ exports.analyze = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "CV analysis stored successfully",
+      message: "Stress analysis stored successfully",
       analysis: record,
       chatbotContext: buildChatbotContext(record.toObject()),
     });
   } catch (error) {
-    console.error("[CV] Analysis error:", error);
+    console.error("[Stress] Analysis error:", error);
     return res.status(error.statusCode || 500).json({
       success: false,
-      message: error.message || "CV analysis failed",
+      message: error.message || "Stress analysis failed",
     });
   }
 };
@@ -255,7 +255,7 @@ exports.analyzeWithImage = async (req, res) => {
     if (!features?.imageQuality?.faceDetected) {
       return res.status(400).json({
         success: false,
-        message: "No face detected in the local CV scan",
+        message: "No face detected in the facial scan",
       });
     }
 
@@ -287,14 +287,14 @@ exports.analyzeWithImage = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "CV + facial stress analysis stored successfully",
+      message: "Facial stress analysis stored successfully",
       analysis: record,
       stressAnalysis,
       chatbotContext: buildChatbotContext(record.toObject()),
     });
   } catch (error) {
     console.error(
-      "[CV] Analyze-with-image error:",
+      "[Stress] Analyze-with-image error:",
       error?.response?.data || error
     );
 
@@ -306,7 +306,7 @@ exports.analyzeWithImage = async (req, res) => {
     return res.status(error.statusCode || 500).json({
       success: false,
       message:
-        pythonMessage || error.message || "CV + facial stress analysis failed",
+        pythonMessage || error.message || "Facial stress analysis failed",
     });
   }
 };
@@ -318,7 +318,7 @@ exports.getLatest = async (req, res) => {
       .lean();
 
     if (!record) {
-      return res.status(404).json({ success: false, message: "No CV analysis found" });
+      return res.status(404).json({ success: false, message: "No stress analysis found" });
     }
 
     return res.json({
@@ -340,7 +340,7 @@ exports.getLatestChatContext = async (req, res) => {
     if (!record) {
       return res.status(404).json({
         success: false,
-        message: "No CV analysis found",
+        message: "No stress analysis found",
       });
     }
 
@@ -375,7 +375,7 @@ exports.getById = async (req, res) => {
     }).lean();
 
     if (!record) {
-      return res.status(404).json({ success: false, message: "CV analysis not found" });
+      return res.status(404).json({ success: false, message: "Stress analysis not found" });
     }
 
     return res.json({
@@ -486,10 +486,10 @@ exports.delete = async (req, res) => {
     });
 
     if (!result) {
-      return res.status(404).json({ success: false, message: "CV analysis not found" });
+      return res.status(404).json({ success: false, message: "Stress analysis not found" });
     }
 
-    return res.json({ success: true, message: "CV analysis deleted" });
+    return res.json({ success: true, message: "Stress analysis deleted" });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

@@ -15,6 +15,7 @@ mlGetHistory,
 mlGetImprovement,
 mlGetLatestAnalysis,
 mlGetLatestHealthRecord,
+getWellnessSummaries,
 } = require(
 "../controllers/mlHealthController"
 );
@@ -77,6 +78,16 @@ router.get(
 "/improvement",
 auth,
 mlGetImprovement
+);
+
+// ============================================================
+// WELLNESS SUMMARIES
+// ============================================================
+
+router.get(
+"/summaries",
+auth,
+getWellnessSummaries
 );
 
 module.exports =

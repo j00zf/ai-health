@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const UserProfile = require("../models/UserProfile");
 const HealthRecord = require("../models/HealthRecord");
+const MLHealthAnalysis = require("../models/mlHealthAnalysis");
+const CVAnalysis = require("../models/CVAnalysis");
 
 exports.getDashboard = async (req, res) => {
   try {
@@ -13,6 +15,32 @@ exports.getDashboard = async (req, res) => {
     const latestRecord = await HealthRecord.findOne({
       userId: req.user.id,
     }).sort({ date: -1 });
+
+    const latestWellness = await MLHealthAnalysis.findOne({
+      user: req.user.id,
+    }).sort({ analyzedAt: -1 });
+
+    const latestStress = await CVAnalysis.findOne({
+      userId: req.user.id,
+    }).sort({ capturedAt: -1 });
+
+    let wellnessScore = null;
+    let wellnessStatus = "unavailable";
+    if (latestWellness && latestWellness.scores && latestWellness.scores.health) {
+        // Assuming scores.health is a probability [0, 1] mapped to [0, 100]
+        wellnessScore = Math.round(latestWellness.scores.health * 100);
+        wellnessStatus = "available";
+    }
+
+    let stressScore = null;
+    let stressStatus = "unavailable";
+    if (latestStress && (latestStress.stressAnalysis?.stressScore !== undefined || latestStress.derivedSignals?.stressScore !== undefined)) {
+        const rawStress = latestStress.stressAnalysis?.stressScore ?? latestStress.derivedSignals?.stressScore;
+        if (rawStress !== null && rawStress !== undefined) {
+             stressScore = Math.round(rawStress * 100);
+             stressStatus = "available";
+        }
+    }
 
     res.status(200).json({
       success: true,
@@ -29,6 +57,13 @@ exports.getDashboard = async (req, res) => {
         },
 
         profile: profile,
+        
+        scores: {
+          wellnessScore: wellnessScore,
+          wellnessStatus: wellnessStatus,
+          stressScore: stressScore,
+          stressStatus: stressStatus,
+        },
 
         stats: {
           steps: latestRecord?.steps ?? 0,

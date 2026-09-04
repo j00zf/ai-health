@@ -268,7 +268,7 @@ getUserId(req);
             success: false,
 
             message:
-                "No health records available for ML analysis. Please sync health data first.",
+                "No health records available for Wellness analysis. Please sync health data first.",
         });
     }
 
@@ -315,7 +315,7 @@ getUserId(req);
             success: false,
 
             message:
-                "Health records could not be prepared for ML analysis.",
+                "Health records could not be prepared for Wellness analysis.",
         });
     }
 
@@ -471,7 +471,7 @@ getUserId(req);
             "pulse-ai",
 
         message:
-            "ML health analysis completed and saved successfully.",
+            "Wellness analysis completed and saved successfully.",
 
         data: {
             ...mlResult,
@@ -512,7 +512,7 @@ getUserId(req);
         success: false,
 
         message:
-            "Unable to complete ML health analysis.",
+            "Unable to complete Wellness analysis.",
 
         error:
             errorData,
@@ -601,7 +601,7 @@ getUserId(req);
         success: false,
 
         message:
-            "Unable to load ML dashboard.",
+            "Unable to load Wellness dashboard.",
     });
 }
 
@@ -702,7 +702,7 @@ getUserId(req);
         success: false,
 
         message:
-            "Unable to load ML health history.",
+            "Unable to load Wellness health history.",
     });
 }
 
@@ -975,4 +975,78 @@ getUserId(req);
 }
 
 
+};
+
+// ============================================================
+// GET WELLNESS SUMMARIES (1D, 7D, 30D)
+// ============================================================
+exports.getWellnessSummaries = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "User authentication required." });
+        }
+
+        const UserProfile = require("../models/UserProfile");
+        const userProfile = await UserProfile.findOne({ userId }) || {};
+
+        let healthRecords = await getLatestHealthRecords(userId, 30);
+        if (!healthRecords.length) {
+            return res.status(400).json({ success: false, message: "No health records available." });
+        }
+
+        // Reverse to Oldest -> Newest
+        healthRecords = [...healthRecords].reverse();
+
+        async function getScore(sliceLength) {
+            const recordsSlice = healthRecords.slice(-sliceLength);
+            if (!recordsSlice.length) return null;
+            
+            const normalization = normalizeHealthRecords(recordsSlice);
+            const normalizedRecords = normalization.records || [];
+            const averages = normalization.averages || {};
+            const latestRecord = normalizedRecords[normalizedRecords.length - 1];
+            
+            const mlProfile = buildProfile(userProfile, latestRecord, averages);
+            
+            const response = await axios.post(`${ML_API_URL}/api/v1/analyze`, {
+                profile: mlProfile,
+                health_records: normalizedRecords,
+            }, { timeout: 30000 });
+            
+            const healthScore = response.data?.data?.scores?.health || response.data?.scores?.health || 0;
+            return Math.round(healthScore * 100);
+        }
+
+        const [score1d, score7d, score30d] = await Promise.all([
+            getScore(1),
+            getScore(7),
+            getScore(30)
+        ]);
+
+        let trendInsight = "Not enough data to determine a trend.";
+        if (score7d !== null && score30d !== null) {
+            if (score7d < score30d - 2) {
+                trendInsight = "Your recent 7-day wellness trend is dropping compared to your monthly average. If you follow this trend, it could negatively impact your long-term health. Consider resting or checking your stress levels.";
+            } else if (score7d > score30d + 2) {
+                trendInsight = "Great job! Your 7-day wellness trend is improving compared to your monthly average. Keep following this routine for better health outcomes.";
+            } else {
+                trendInsight = "Your wellness trend is stable and consistent with your monthly average. Keep it up!";
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Wellness summaries calculated successfully",
+            data: {
+                latestScore: score1d,
+                weeklyScore: score7d,
+                monthlyScore: score30d,
+                trendInsight: trendInsight
+            }
+        });
+    } catch (error) {
+        console.error("WELLNESS SUMMARIES ERROR:", error.message || error);
+        return res.status(500).json({ success: false, message: "Unable to calculate wellness summaries." });
+    }
 };
