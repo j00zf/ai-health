@@ -34,67 +34,57 @@ null
 );
 }
 
-function buildProfile(userProfile = {}) {
-return {
-age:
-userProfile.age ??
-userProfile.age_years ??
-null,
+function buildProfile(userProfile = {}, latestRecord = {}, averages = {}) {
+    let sexVal = null;
+    if (userProfile.sex === "Male") sexVal = 1;
+    else if (userProfile.sex === "Female") sexVal = 0;
 
+    let smokingVal = 0;
+    if (userProfile.smokingStatus === "Yes" || userProfile.smokingStatus === "Occasionally") smokingVal = 1;
 
-    sex:
-        userProfile.sex ??
-        userProfile.gender ??
-        null,
+    let alcoholVal = 0;
+    if (userProfile.alcoholConsumption === "Yes" || userProfile.alcoholConsumption === "Occasionally") alcoholVal = 1;
 
-    height_cm:
-        userProfile.height_cm ??
-        userProfile.height ??
-        null,
+    let heightCm = userProfile.height ?? null;
+    let weightKg = userProfile.weight ?? null;
+    let bmi = userProfile.bmi ?? null;
 
-    weight_kg:
-        userProfile.weight_kg ??
-        userProfile.weight ??
-        null,
+    // Appropriate Method: Calculate BMI if missing but height & weight exist
+    if (bmi === null && heightCm != null && weightKg != null && heightCm > 0) {
+        const heightM = heightCm / 100;
+        bmi = Number((weightKg / (heightM * heightM)).toFixed(2));
+    }
 
-    bmi:
-        userProfile.bmi ??
-        null,
+    // Appropriate Method: Fallback to user's historical averages for missing daily metrics
+    let activityMinutes = null;
+    if (latestRecord && latestRecord.activeZoneMinutes != null) {
+        activityMinutes = latestRecord.activeZoneMinutes;
+    } else if (latestRecord && latestRecord.activeHours != null) {
+        activityMinutes = latestRecord.activeHours * 60;
+    } else if (averages && averages.activeZoneMinutes != null) {
+        activityMinutes = averages.activeZoneMinutes;
+    } else if (averages && averages.activeHours != null) {
+        activityMinutes = averages.activeHours * 60;
+    }
 
-    waist_cm:
-        userProfile.waist_cm ??
-        userProfile.waist ??
-        userProfile.waistCircumference ??
-        null,
+    let heartRate = (latestRecord && latestRecord.heartRate) ?? (averages && averages.heartRate) ?? null;
+    let sleepHours = (latestRecord && latestRecord.sleepHours) ?? (averages && averages.sleepHours) ?? userProfile.sleepTargetHours ?? null;
 
-    heart_rate:
-        userProfile.heart_rate ??
-        userProfile.heartRate ??
-        null,
+    return {
+        age: userProfile.age ?? null,
+        sex: sexVal,
+        height_cm: heightCm,
+        weight_kg: weightKg,
+        bmi: bmi,
+        waist_cm: userProfile.waistCircumference ?? null,
 
-    activity_minutes:
-        userProfile.activity_minutes ??
-        userProfile.activityMinutes ??
-        null,
+        heart_rate: heartRate,
+        activity_minutes: activityMinutes,
+        sleep_hours: sleepHours,
 
-    sleep_hours:
-        userProfile.sleep_hours ??
-        userProfile.sleepHours ??
-        null,
-
-    smoking:
-        userProfile.smoking ??
-        userProfile.smoke ??
-        userProfile.smokingStatus ??
-        0,
-
-    alcohol:
-        userProfile.alcohol ??
-        userProfile.alcoholConsumption ??
-        0,
-};
-
-
+        smoking: smokingVal,
+        alcohol: alcoholVal,
+    };
 }
 
 function serializeAnalysis(analysis) {
@@ -345,7 +335,7 @@ getUserId(req);
     // ====================================================
 
     const mlProfile =
-        buildProfile(profile);
+        buildProfile(profile, latestRecord, averages);
 
 
     // ====================================================

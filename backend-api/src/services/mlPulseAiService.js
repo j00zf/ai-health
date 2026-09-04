@@ -122,8 +122,8 @@ function normalizeHealthRecord(
         restingHeartRate:
             record.restingHeartRate ?? null,
 
-        sleep:
-            record.sleep ?? null,
+        sleepHours:
+            record.sleepHours ?? null,
 
         weight:
             record.weight ?? null,
@@ -131,14 +131,20 @@ function normalizeHealthRecord(
         bmi:
             record.bmi ?? null,
 
-        oxygenSaturation:
-            record.oxygenSaturation ?? null,
+        bloodOxygen:
+            record.bloodOxygen ?? null,
 
         calories:
             record.calories ?? null,
 
-        distance:
-            record.distance ?? null,
+        distanceWalked:
+            record.distanceWalked ?? null,
+            
+        bodyTemperature:
+            record.bodyTemperature ?? null,
+            
+        floors:
+            record.floors ?? null,
     };
 }
 

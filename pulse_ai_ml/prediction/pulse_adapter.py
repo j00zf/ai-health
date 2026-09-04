@@ -120,7 +120,7 @@ def adapt_health_record(
 
     sleep_hours = number(
         record.get(
-            "sleep"
+            "sleepHours"
         )
     )
 
@@ -149,7 +149,7 @@ def adapt_health_record(
 
     spo2 = number(
         record.get(
-            "oxygenSaturation"
+            "bloodOxygen"
         )
     )
 
@@ -171,7 +171,7 @@ def adapt_health_record(
 
     distance = number(
         record.get(
-            "distance"
+            "distanceWalked"
         )
     )
 
