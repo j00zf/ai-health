@@ -48,7 +48,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
     return Scaffold(
       backgroundColor: const Color(0xfff4f7f6),
       appBar: AppBar(
-        title: const Text('Computer Vision'),
+        title: const Text('Stress Scan'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
@@ -139,7 +139,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
           _featureCard(
             Icons.mood_outlined,
             'Expression',
-            'Smile probability where supported by ML Kit.',
+            'Smile probability where supported.',
           ),
           _featureCard(
             Icons.light_mode_outlined,
@@ -238,7 +238,7 @@ class _CVAnalysisScreenState extends State<CVAnalysisScreen> {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'The guided scan uses ML Kit on-device. One straight-facing JPEG is temporarily sent to the backend and Python model for inference, then discarded. The raw face image is not stored. These signals are experimental and are not a diagnosis.',
+              'The guided scan uses our on-device scanner. One straight-facing JPEG is temporarily sent to the backend and Python model for inference, then discarded. The raw face image is not stored. These signals are experimental and are not a diagnosis.',
               style: TextStyle(fontSize: 12, height: 1.5),
             ),
           ),

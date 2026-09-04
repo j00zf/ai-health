@@ -57,7 +57,7 @@ class MlHealthDetailsScreen
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Full ML Analysis',
+          'Full Wellness Analysis',
         ),
       ),
       body: ListView(

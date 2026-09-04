@@ -25,6 +25,7 @@ class _MlHealthDashboardScreenState
   String? errorMessage;
 
   Map<String, dynamic>? analysis;
+  Map<String, dynamic>? wellnessSummaries;
 
   @override
   void initState() {
@@ -52,6 +53,13 @@ class _MlHealthDashboardScreenState
 
     if (!mounted) return;
 
+    final summariesResult =
+        await MlHealthService.getWellnessSummaries(
+      token: widget.token,
+    );
+
+    if (!mounted) return;
+
     if (result['success'] == true) {
       final rawData = result['data'];
 
@@ -60,6 +68,10 @@ class _MlHealthDashboardScreenState
             ? Map<String, dynamic>.from(rawData)
             : null;
 
+        if (summariesResult['success'] == true && summariesResult['data'] is Map) {
+          wellnessSummaries = Map<String, dynamic>.from(summariesResult['data']);
+        }
+
         isLoading = false;
       });
     } else {
@@ -67,7 +79,7 @@ class _MlHealthDashboardScreenState
         isLoading = false;
         errorMessage =
             result['message']?.toString() ??
-            'Failed to load ML health analysis';
+            'Failed to load Wellness Analysis';
       });
     }
   }
@@ -135,7 +147,7 @@ class _MlHealthDashboardScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'ML Health Analysis',
+          'Wellness Insights',
         ),
         actions: [
           IconButton(
@@ -219,7 +231,7 @@ class _MlHealthDashboardScreenState
 
           Center(
             child: Text(
-              'No ML health analysis available yet',
+              'No Wellness Analysis available yet',
             ),
           ),
         ],
@@ -263,6 +275,14 @@ class _MlHealthDashboardScreenState
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ======================================================
+        // WELLNESS SUMMARIES
+        // ======================================================
+        if (wellnessSummaries != null) ...[
+          _buildWellnessSummariesCard(wellnessSummaries!),
+          const SizedBox(height: 16),
+        ],
+
         // ======================================================
         // OVERALL SCORE
         // ======================================================
@@ -458,6 +478,72 @@ class _MlHealthDashboardScreenState
         ),
 
         const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  // ============================================================
+  // WELLNESS SUMMARIES
+  // ============================================================
+
+  Widget _buildWellnessSummariesCard(Map<String, dynamic> summaries) {
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildSummaryStat('1-Day', summaries['latestScore']),
+                _buildSummaryStat('7-Day', summaries['weeklyScore']),
+                _buildSummaryStat('30-Day', summaries['monthlyScore']),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Symbols.insights, color: Colors.indigo, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      summaries['trendInsight'] ?? '',
+                      style: const TextStyle(fontSize: 14, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryStat(String label, dynamic score) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _scoreText(score),
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: _scoreColor(_number(score)),
+          ),
+        ),
       ],
     );
   }

@@ -1401,7 +1401,7 @@ class _CVCameraScreenState extends State<CVCameraScreen>
         elevation: 0,
 
         title: const Text(
-          'Computer Vision',
+          'Stress Scan',
           style: TextStyle(
             fontWeight:
                 FontWeight.w700,

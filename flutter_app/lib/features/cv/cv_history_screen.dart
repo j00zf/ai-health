@@ -107,7 +107,7 @@ class _CVHistoryScreenState
 
                         Center(
                           child: Text(
-                            'No CV analyses yet.',
+                            'No Stress analyses yet.',
                           ),
                         ),
                       ],

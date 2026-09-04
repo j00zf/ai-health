@@ -254,7 +254,7 @@ class _MlHealthHistoryScreenState
 
           Center(
             child: Text(
-              'No ML analysis history available',
+              'No Wellness analysis history available',
             ),
           ),
         ],

@@ -317,4 +317,35 @@ options: _options(token),
 
 
 }
+
+// ===========================================================================
+// GET WELLNESS SUMMARIES (1D, 7D, 30D)
+// ===========================================================================
+
+static Future<Map<String, dynamic>>
+getWellnessSummaries({
+required String token,
+}) async {
+try {
+final response = await _dio.get(
+'${ApiConstants.baseUrl}/v1/ml-health/summaries',
+options: _options(token),
+);
+
+  return _asMap(response.data);
+} on DioException catch (e) {
+  return {
+    'success': false,
+    'message': _errorMessage(
+      e,
+      'Failed to load wellness summaries.',
+    ),
+  };
+} catch (e) {
+  return {
+    'success': false,
+    'message': e.toString(),
+  };
+}
+}
 }

@@ -453,7 +453,7 @@ class _CVSummaryScreenState
               SizedBox(width: 8),
 
               Text(
-                'About CV trends',
+                'About Stress trends',
                 style: TextStyle(
                   fontWeight:
                       FontWeight.w800,

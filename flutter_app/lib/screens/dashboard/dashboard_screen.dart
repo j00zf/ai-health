@@ -148,7 +148,7 @@ class _DashboardScreenState
           _mlLoading = false;
 
           _mlError = result['message']?.toString() ??
-              'No ML health analysis available yet.';
+              'No Wellness analysis available yet.';
         });
       }
     } catch (e) {
@@ -157,7 +157,7 @@ class _DashboardScreenState
       if (mounted) {
         setState(() {
           _mlLoading = false;
-          _mlError = 'Unable to load ML health analysis.';
+          _mlError = 'Unable to load Wellness analysis.';
         });
       }
     }
@@ -184,7 +184,7 @@ class _DashboardScreenState
       }
     } catch (e) {
       debugPrint('[Dashboard] CV analysis load error: $e');
-      if (mounted) setState(() { _cvLoading = false; _cvError = 'No recent CV scan available.'; _cvAnalysis = null; });
+      if (mounted) setState(() { _cvLoading = false; _cvError = 'No recent Stress scan available.'; _cvAnalysis = null; });
     }
   }
 
@@ -258,7 +258,7 @@ if (result['success'] == true) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'ML analysis completed and saved successfully.',
+          'Wellness analysis completed and saved successfully.',
         ),
         backgroundColor: Colors.green,
       ),
@@ -267,7 +267,7 @@ if (result['success'] == true) {
 } else {
   final message =
       result['message']?.toString() ??
-      'Unable to complete ML health analysis.';
+      'Unable to complete Wellness analysis.';
 
   setState(() {
     _mlError = message;
@@ -292,14 +292,14 @@ if (!mounted) return;
 
 setState(() {
   _mlError =
-      'Unable to complete ML health analysis.';
+      'Unable to complete Wellness analysis.';
 });
 
 if (showFeedback) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
-        'ML analysis failed: $e',
+        'Wellness analysis failed: $e',
       ),
       backgroundColor: Colors.redAccent,
     ),
@@ -1820,7 +1820,7 @@ debugPrint(
                   ),
                   SizedBox(height: 3),
                   Text(
-                    'Real-time stress tracking via Computer Vision',
+                    'Real-time stress tracking',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.black45,
@@ -2255,7 +2255,7 @@ debugPrint(
               label: Text(
                 _mlAnalyzing
                     ? 'Analyzing Latest Records...'
-                    : 'Run ML Analysis',
+                    : 'Run Wellness Analysis',
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xff6c5ce7),
@@ -3982,7 +3982,7 @@ debugPrint(
           'cv_analysis_fab',
 
       tooltip:
-          'Computer Vision',
+          'Stress Scan',
 
       onPressed: () async {
         await Navigator.push(
