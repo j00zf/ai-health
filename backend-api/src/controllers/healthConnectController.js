@@ -20,12 +20,38 @@ const NUMERIC_FIELDS = [
 
 const normalizeRecord = (record) => {
   const out = {};
+  
+  // Helper to check primary key first, then fallback aliases
+  const getVal = (primary, ...aliases) => {
+    let val = record?.[primary];
+    if (val !== undefined && val !== null && val !== "") return val;
+    for (const alias of aliases) {
+      val = record?.[alias];
+      if (val !== undefined && val !== null && val !== "") return val;
+    }
+    return undefined;
+  };
+
+  out.steps = Number(getVal("steps"));
+  out.distanceWalked = Number(getVal("distanceWalked", "distance"));
+  out.calories = Number(getVal("calories", "caloriesBurned"));
+  out.activeHours = Number(getVal("activeHours", "activityHours"));
+  out.floors = Number(getVal("floors"));
+  out.activeZoneMinutes = Number(getVal("activeZoneMinutes", "activeMinutes"));
+  out.heartRate = Number(getVal("heartRate", "averageHeartRate"));
+  out.restingHeartRate = Number(getVal("restingHeartRate"));
+  out.sleepHours = Number(getVal("sleepHours", "sleep"));
+  out.bloodOxygen = Number(getVal("bloodOxygen", "oxygenSaturation"));
+  out.bodyTemperature = Number(getVal("bodyTemperature", "temperature"));
+  out.weight = Number(getVal("weight"));
+
   NUMERIC_FIELDS.forEach((field) => {
-    const value = Number(record?.[field]);
+    const value = out[field];
     out[field] = Number.isFinite(value) ? value : 0;
   });
 
-  out.date = String(record?.date || "").slice(0, 10);
+  const dateVal = getVal("date", "recordedAt", "createdAt", "syncedAt");
+  out.date = String(dateVal || "").slice(0, 10);
   out.source = record?.source || "Google Health Cloud API";
   out.syncedAt = record?.syncedAt ? new Date(record.syncedAt) : new Date();
   out.recordHash = record?.recordHash || makeRecordHash(out);
