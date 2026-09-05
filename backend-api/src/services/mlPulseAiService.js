@@ -54,6 +54,17 @@ function validateHealthRecords(
 // PROFILE NORMALIZATION
 // ============================================================
 
+function parseBooleanToInt(val) {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'boolean') return val ? 1 : 0;
+    const lower = String(val).toLowerCase().trim();
+    if (['no', 'false', '0', 'none', 'never'].includes(lower)) return 0;
+    if (['yes', 'true', '1', 'often', 'sometimes'].includes(lower)) return 1;
+    const parsed = parseInt(val, 10);
+    return isNaN(parsed) ? 0 : parsed;
+}
+
 function normalizeProfile(profile) {
 
     return {
@@ -86,10 +97,10 @@ function normalizeProfile(profile) {
             profile.sleep_hours ?? null,
 
         smoking:
-            profile.smoking ?? null,
+            parseBooleanToInt(profile.smoking),
 
         alcohol:
-            profile.alcohol ?? null,
+            parseBooleanToInt(profile.alcohol),
     };
 }
 

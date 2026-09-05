@@ -125,6 +125,18 @@ function cleanHealthRecord(record) {
 // ============================================================================
 
 function buildSystemPrompt(profile, healthData, wellnessScore, stressScore, mlAnalysis, cvAnalysis) {
+  const mlSummary = mlAnalysis ? {
+    scores: mlAnalysis.scores,
+    wellness: mlAnalysis.wellness,
+    insights: mlAnalysis.insights,
+    recommendations: mlAnalysis.recommendations
+  } : {};
+
+  const cvSummary = cvAnalysis ? {
+    stressAnalysis: cvAnalysis.stressAnalysis,
+    healthContext: cvAnalysis.healthContext
+  } : {};
+
   return `
 You are Pulse AI, a personal health information assistant.
 
@@ -227,10 +239,10 @@ Wellness Score (0-100): ${wellnessScore ?? 'Not Available'}
 Stress Score (0-100): ${stressScore ?? 'Not Available'}
 
 ML Wellness Analysis:
-${JSON.stringify(mlAnalysis || {}, null, 2)}
+${JSON.stringify(mlSummary, null, 2)}
 
 CV Stress Analysis:
-${JSON.stringify(cvAnalysis || {}, null, 2)}
+${JSON.stringify(cvSummary, null, 2)}
 
 ======================================================================
 RESPONSE STYLE
