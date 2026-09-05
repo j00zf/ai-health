@@ -32,6 +32,8 @@ const User = require("../models/User");
 const UserProfile = require("../models/UserProfile");
 const HealthRecord = require("../models/HealthRecord");
 const AIConversation = require("../models/AIConversation");
+const MLHealthAnalysis = require("../models/mlHealthAnalysis");
+const CVAnalysis = require("../models/CVAnalysis");
 
 // ============================================================================
 // GROQ CONFIGURATION
@@ -122,12 +124,13 @@ function cleanHealthRecord(record) {
 // SYSTEM PROMPT
 // ============================================================================
 
-function buildSystemPrompt(profile, healthData) {
+function buildSystemPrompt(profile, healthData, wellnessScore, stressScore, mlAnalysis, cvAnalysis) {
   return `
 You are Pulse AI, a personal health information assistant.
 
 Your purpose is to help users understand their personal health,
-fitness, sleep, activity and wearable data.
+fitness, sleep, activity, wearable data, as well as AI-derived wellness and stress metrics.
+You should act proactively to detect early health risks and enable preventive care.
 
 You are powered by an AI language model and are NOT a doctor.
 
@@ -169,13 +172,15 @@ HOW TO USE HEALTH DATA
 
 When a user's question is related to their health:
 
-- Look at the supplied health metrics.
+- Look at the supplied health metrics, wellness score, stress score, and AI analyses.
 - Use the actual values in your explanation.
 - Mention the relevant measurements.
+- Highlight any potential early health risks based on the combined data (e.g., high stress + poor sleep).
+- Provide practical preventive care advice to mitigate identified risks.
 - Do not make up missing values.
 - If a metric is unavailable, say that it is not available.
 - Do not confuse heart rate with resting heart rate.
-- Do not treat wearable measurements as a medical diagnosis.
+- Do not treat wearable measurements or AI scores as a medical diagnosis.
 
 For example, if the health data says:
 
@@ -214,6 +219,18 @@ ${JSON.stringify(
     null,
     2
   )}
+
+======================================================================
+AI DERIVED SCORES & ANALYSIS
+======================================================================
+Wellness Score (0-100): ${wellnessScore ?? 'Not Available'}
+Stress Score (0-100): ${stressScore ?? 'Not Available'}
+
+ML Wellness Analysis:
+${JSON.stringify(mlAnalysis || {}, null, 2)}
+
+CV Stress Analysis:
+${JSON.stringify(cvAnalysis || {}, null, 2)}
 
 ======================================================================
 RESPONSE STYLE
@@ -518,6 +535,35 @@ exports.sendMessage = async (
       );
 
     // ------------------------------------------------------------------------
+    // LATEST CV & ML ANALYSIS
+    // ------------------------------------------------------------------------
+
+    const latestWellness = await MLHealthAnalysis.findOne({
+      user: req.user.id,
+    })
+      .sort({ analyzedAt: -1 })
+      .lean();
+
+    const latestStress = await CVAnalysis.findOne({
+      userId: req.user.id,
+    })
+      .sort({ capturedAt: -1 })
+      .lean();
+
+    let wellnessScore = null;
+    if (latestWellness && latestWellness.scores && latestWellness.scores.health) {
+        wellnessScore = Math.round(latestWellness.scores.health * 100);
+    }
+
+    let stressScore = null;
+    if (latestStress && (latestStress.stressAnalysis?.stressScore !== undefined || latestStress.derivedSignals?.stressScore !== undefined)) {
+        const rawStress = latestStress.stressAnalysis?.stressScore ?? latestStress.derivedSignals?.stressScore;
+        if (rawStress !== null && rawStress !== undefined) {
+             stressScore = Math.round(rawStress * 100);
+        }
+    }
+
+    // ------------------------------------------------------------------------
     // GET OR CREATE CONVERSATION
     // ------------------------------------------------------------------------
 
@@ -568,13 +614,14 @@ exports.sendMessage = async (
       buildSystemPrompt(
         {
           name: user.name,
-
           email: user.email,
-
           profile,
         },
-
-        healthData
+        healthData,
+        wellnessScore,
+        stressScore,
+        latestWellness,
+        latestStress
       );
 
     // ------------------------------------------------------------------------

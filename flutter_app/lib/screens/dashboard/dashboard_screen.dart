@@ -1660,28 +1660,56 @@ debugPrint(
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           initiallyExpanded: false,
-          iconColor: const Color(0xff6c5ce7),
-          collapsedIconColor: Colors.black45,
-          title: const Text(
-            'My Profile Details',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-            ),
+          iconColor: const Color(0xff9f6eff),
+          collapsedIconColor: Colors.black54,
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xff9f6eff).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.person_outline_rounded, color: Color(0xff9f6eff), size: 20),
+              ),
+              const SizedBox(width: 14),
+              const Text(
+                'My Profile Details',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
           ),
           children: [
-            _buildInfoTile("Nickname", profile["nickname"]?.toString() ?? "-"),
-            _buildInfoTile("Age", profile["age"]?.toString() ?? "-"),
-            _buildInfoTile("BMI", profile["bmi"]?.toString() ?? "-"),
-            _buildInfoTile("Health Goal", profile["healthGoal"]?.toString() ?? "-"),
-            _buildInfoTile("Activity Level", profile["activityLevel"]?.toString() ?? "-"),
-            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  _buildInfoTile("Nickname", profile["nickname"]?.toString() ?? "-"),
+                  _buildInfoTile("Age", profile["age"]?.toString() ?? "-"),
+                  _buildInfoTile("BMI", profile["bmi"]?.toString() ?? "-"),
+                  _buildInfoTile("Health Goal", profile["healthGoal"]?.toString() ?? "-"),
+                  _buildInfoTile("Activity Level", profile["activityLevel"]?.toString() ?? "-"),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1692,22 +1720,26 @@ debugPrint(
     final rawScores = _mlAnalysis?['scores'];
     final mlScores = rawScores is Map ? Map<String, dynamic>.from(rawScores) : <String, dynamic>{};
     final wellnessScoreRaw = _toDouble(mlScores['overallWellbeingScore']);
-    final wellnessScoreStr = _mlAnalysis != null ? (wellnessScoreRaw * 100).toStringAsFixed(0) : '--';
+    final wellnessScoreStr = _mlAnalysis != null ? (wellnessScoreRaw * 100).toStringAsFixed(2) : '--';
 
     final stressScoreRaw = _cvAnalysis?['stressAnalysis']?['stressScore'];
-    final stressScoreStr = _cvAnalysis != null && stressScoreRaw != null ? (_toDouble(stressScoreRaw) * 100).toStringAsFixed(0) : '--';
+    final stressScoreStr = _cvAnalysis != null && stressScoreRaw != null ? (_toDouble(stressScoreRaw) * 100).toStringAsFixed(2) : '--';
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2C3E50), Color(0xFF4CA1AF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF4CA1AF).withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1715,24 +1747,99 @@ debugPrint(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Your Snapshot',
+            'Health Snapshot',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Colors.white,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
-                child: _buildMetricTile(Icons.health_and_safety_rounded, 'Wellness Score', wellnessScoreStr),
+                child: _buildRichMetricTile(
+                  Icons.health_and_safety_rounded, 
+                  'Wellness', 
+                  wellnessScoreStr,
+                  Colors.greenAccent,
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
-                child: _buildMetricTile(Icons.face_retouching_natural_rounded, 'Stress Score', stressScoreStr),
+                child: _buildRichMetricTile(
+                  Icons.face_retouching_natural_rounded, 
+                  'Stress', 
+                  stressScoreStr,
+                  Colors.orangeAccent,
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AIChatScreen(
+                      token: widget.token,
+                      initialPrompt: "Please analyze my latest data to detect any early health risks and provide prevention tips based on my Wellness Score, Stress Score, and all my latest health records.",
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Detect Early Health Risks'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF2C3E50),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRichMetricTile(IconData icon, String label, String value, Color accentColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accentColor, size: 28),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withOpacity(0.9),
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -1931,7 +2038,14 @@ debugPrint(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
         border: isStale ? Border.all(color: Colors.orange.withOpacity(0.5), width: 2) : null,
       ),
       child: Column(
@@ -1949,12 +2063,12 @@ debugPrint(
                     children: [
                       Text(
                         stressScore != null ? (stressScore * 100).toStringAsFixed(0) : '--',
-                        style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: levelColor),
+                        style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, color: levelColor),
                       ),
                       const SizedBox(width: 4),
                       const Padding(
-                        padding: EdgeInsets.only(bottom: 6),
-                        child: Text('/ 100', style: TextStyle(fontSize: 16, color: Colors.black38)),
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text('/ 100', style: TextStyle(fontSize: 16, color: Colors.black38, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -1963,12 +2077,12 @@ debugPrint(
               if (stressLevel != 'UNVERIFIED' && stressLevel != 'UNKNOWN')
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(color: levelColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                  child: Text(stressLevel, style: TextStyle(color: levelColor, fontWeight: FontWeight.bold)),
+                  decoration: BoxDecoration(color: levelColor.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                  child: Text(stressLevel, style: TextStyle(color: levelColor, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Row(
             children: [
               Expanded(
@@ -1989,7 +2103,7 @@ debugPrint(
                 children: [
                   const Icon(Icons.timer_outlined, color: Colors.orange),
                   const SizedBox(width: 12),
-                  const Expanded(child: Text('Your last scan was over 6 hours ago.', style: TextStyle(color: Colors.orange, fontSize: 13))),
+                  const Expanded(child: Text('Your last scan was over 6 hours ago.', style: TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.w500))),
                   TextButton(
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CVAnalysisScreen())).then((_) => _loadCvAnalysis()),
                     style: TextButton.styleFrom(foregroundColor: Colors.orange, padding: EdgeInsets.zero, minimumSize: const Size(60, 30)),
@@ -2000,23 +2114,45 @@ debugPrint(
             ),
           ] else ...[
             const SizedBox(height: 20),
-            Text(
-              stressLevel == 'LOW' 
-                ? 'Your stress levels are looking good! Keep up the relaxed state.' 
-                : stressLevel == 'MODERATE'
-                  ? 'You are showing moderate signs of stress. Consider taking a short break or a deep breath.'
-                  : (stressLevel == 'ELEVATED' || stressLevel == 'HIGH')
-                    ? 'High stress detected! Please take some time to relax, perhaps step away from the screen.'
-                    : 'Stress level is currently unverified or unknown.',
-              style: const TextStyle(color: Colors.black87, fontSize: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.tips_and_updates_rounded, color: Colors.amber.shade700, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      stressLevel == 'LOW' 
+                        ? 'Your stress levels are looking good! Keep up the relaxed state.' 
+                        : stressLevel == 'MODERATE'
+                          ? 'You are showing moderate signs of stress. Consider taking a short break or a deep breath.'
+                          : (stressLevel == 'ELEVATED' || stressLevel == 'HIGH')
+                            ? 'High stress detected! Please take some time to relax, perhaps step away from the screen.'
+                            : 'Stress level is currently unverified or unknown.',
+                      style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CVAnalysisDetailScreen(analysisId: _cvAnalysis!['_id']))).then((_) => _loadCvAnalysis()),
-              child: const Text('View Full Report'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                side: BorderSide(color: levelColor.withOpacity(0.5), width: 1.5),
+                foregroundColor: levelColor,
+              ),
+              child: const Text('View Full Report', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],

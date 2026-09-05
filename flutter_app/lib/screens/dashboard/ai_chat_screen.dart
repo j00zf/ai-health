@@ -9,11 +9,13 @@ import '../../core/services/auth_manager.dart';
 class AIChatScreen extends StatefulWidget {
   final String token;
   final Map<String, dynamic>? latestHealthRecord;
+  final String? initialPrompt;
 
   const AIChatScreen({
     super.key,
     required this.token,
     this.latestHealthRecord,
+    this.initialPrompt,
   });
 
   @override
@@ -71,7 +73,26 @@ class _AIChatScreenState extends State<AIChatScreen> {
   void initState() {
     super.initState();
 
-    _loadConversations();
+    if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+      _startNewChatWithPrompt(widget.initialPrompt!);
+    } else {
+      _loadConversations();
+    }
+  }
+
+  void _startNewChatWithPrompt(String prompt) {
+    setState(() {
+      _loadingConversations = false;
+      _loadingHistory = false;
+      _conversationId = null;
+      _messages.clear();
+    });
+    
+    // Defer the message sending to ensure the build completes first.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.text = prompt;
+      _sendMessage();
+    });
   }
 
   @override
