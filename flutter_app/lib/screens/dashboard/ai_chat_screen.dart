@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/constants/api_constants.dart';
@@ -1269,17 +1270,62 @@ class _AIChatScreenState extends State<AIChatScreen> {
               CrossAxisAlignment.start,
 
           children: [
-            Text(
-              message.text,
-              style: TextStyle(
-                color:
-                    message.fromUser
-                        ? Colors.white
-                        : const Color(
-                            0xff2d3748,
-                          ),
-                fontSize: 14,
-                height: 1.45,
+            MarkdownBody(
+              data: message.text,
+              styleSheet: MarkdownStyleSheet(
+                p: TextStyle(
+                  color: message.fromUser
+                      ? Colors.white
+                      : const Color(0xff2d3748),
+                  fontSize: 14,
+                  height: 1.45,
+                ),
+                tableBody: TextStyle(
+                  color: message.fromUser
+                      ? Colors.white
+                      : const Color(0xff2d3748),
+                  fontSize: 13,
+                ),
+                tableHead: TextStyle(
+                  color: message.fromUser
+                      ? Colors.white
+                      : const Color(0xff1a202c),
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+                tableBorder: TableBorder.all(
+                  color: message.fromUser
+                      ? Colors.white38
+                      : Colors.black12,
+                  width: 1,
+                ),
+                listBullet: TextStyle(
+                  color: message.fromUser
+                      ? Colors.white
+                      : const Color(0xff2d3748),
+                ),
+                strong: TextStyle(
+                  color: message.fromUser
+                      ? Colors.white
+                      : const Color(0xff1a202c),
+                  fontWeight: FontWeight.bold,
+                ),
+                blockquote: TextStyle(
+                  color: message.fromUser
+                      ? Colors.white70
+                      : const Color(0xff4a5568),
+                  fontStyle: FontStyle.italic,
+                ),
+                blockquoteDecoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: message.fromUser
+                          ? Colors.white38
+                          : const Color(0xffcbd5e0),
+                      width: 4,
+                    ),
+                  ),
+                ),
               ),
             ),
 

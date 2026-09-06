@@ -1720,10 +1720,10 @@ debugPrint(
     final rawScores = _mlAnalysis?['scores'];
     final mlScores = rawScores is Map ? Map<String, dynamic>.from(rawScores) : <String, dynamic>{};
     final wellnessScoreRaw = _toDouble(mlScores['overallWellbeingScore']);
-    final wellnessScoreStr = _mlAnalysis != null ? (wellnessScoreRaw * 100).toStringAsFixed(2) : '--';
+    final wellnessScoreStr = _mlAnalysis != null ? '${wellnessScoreRaw.toStringAsFixed(2)}%' : '--';
 
     final stressScoreRaw = _cvAnalysis?['stressAnalysis']?['stressScore'];
-    final stressScoreStr = _cvAnalysis != null && stressScoreRaw != null ? (_toDouble(stressScoreRaw) * 100).toStringAsFixed(2) : '--';
+    final stressScoreStr = _cvAnalysis != null && stressScoreRaw != null ? '${(_toDouble(stressScoreRaw) * 100).toStringAsFixed(2)}%' : '--';
 
     return Container(
       width: double.infinity,
@@ -2331,7 +2331,7 @@ debugPrint(
                       MainAxisAlignment.center,
                   children: [
                     Text(
-                      overallScore.toStringAsFixed(1),
+                      '${overallScore.toStringAsFixed(1)}%',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 34,
@@ -2548,7 +2548,7 @@ debugPrint(
           const SizedBox(height: 7),
 
           Text(
-            score.toStringAsFixed(1),
+            '${score.toStringAsFixed(1)}%',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,

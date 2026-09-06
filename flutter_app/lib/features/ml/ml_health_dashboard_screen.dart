@@ -537,7 +537,7 @@ class _MlHealthDashboardScreenState
         ),
         const SizedBox(height: 4),
         Text(
-          _scoreText(score),
+          '${_scoreText(score)}%',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -573,7 +573,7 @@ class _MlHealthDashboardScreenState
             const SizedBox(height: 16),
 
             Text(
-              _scoreText(score),
+              '${_scoreText(score)}%',
               style: TextStyle(
                 fontSize: 58,
                 fontWeight: FontWeight.bold,
@@ -622,7 +622,7 @@ class _MlHealthDashboardScreenState
             const SizedBox(height: 8),
 
             Text(
-              _scoreText(score),
+              '${_scoreText(score)}%',
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
